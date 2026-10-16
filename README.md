@@ -1,150 +1,271 @@
 # plc-ci-toolkit
 
-[![CI](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/ci.yml)
+<p>
+  <a href="https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/<GITHUB_USER>/plc-ci-toolkit/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1B2736"></a>
+  <a href="docs/MANUAL_STEPS.md#12-первый-прогон-windows-job"><img alt="CODESYS job: ожидает первого прогона на раннере" src="https://img.shields.io/badge/CODESYS%20job-pending%20first%20run-56677D?style=flat-square&labelColor=1B2736"></a>
+  <a href=".github/actionlint.yaml"><img alt="Workflow проверены actionlint" src="https://img.shields.io/badge/workflows-actionlint-3A4B60?style=flat-square&labelColor=1B2736"></a>
+  <img alt="CODESYS 3.5.17.30" src="https://img.shields.io/badge/CODESYS-3.5.17.30-C2410C?style=flat-square&labelColor=1B2736">
+  <img alt="GitHub Actions: reusable workflows" src="https://img.shields.io/badge/GitHub%20Actions-workflow__call-3A4B60?style=flat-square&logo=githubactions&logoColor=white">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3A4B60?style=flat-square&logo=python&logoColor=white">
+  <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-56677D?style=flat-square&labelColor=1B2736"></a>
+</p>
 
-Шаблон репозитория для ПЛК-проектов на CODESYS V3.5 (3.5.17.30, целевой ПЛК — ОВЕН ПЛК210).
-Решает главную проблему ПЛК-кода в git: проект CODESYS (`.project`) бинарный, его нельзя ревьюить
-и сливать. Здесь источник истины — текстовые файлы ST, проект собирается из них скриптом, а
-проверки (линтер, статанализ, проверка компиляции) идут в CI без CODESYS.
+CI для ПЛК-кода на CODESYS V3.5: два переиспользуемых workflow GitHub Actions для репозиториев на
+шаблоне plc-repo-template (`<TEMPLATE_REPO_URL>`). Проверки без CODESYS — линтеры, статанализ,
+проверка компиляции — идут на каждый push и pull request на GitHub-hosted Linux; полная сборка в
+CODESYS 3.5.17.30, загрузка в CODESYS Control Win V3 и тесты coUnit (CfUnit) с JUnit-отчётом — на
+своём Windows-раннере, только для `main`, тегов и ручного запуска. Подключение к своему репозиторию —
+один файл workflow, 30 строк без комментариев.
 
 ## Демонстрация
 
-> _Плейсхолдер: GIF «импорт → сборка → тесты CfUnit в Control Win» появится после первого
-> прогона в CODESYS._
+<p align="center">
+  <img alt="Команды Windows-job в PowerShell: перезапуск рантайма с новым окном демо-режима 120 минут, cds.py test — импорт 38 объектов, сборка без ошибок, 18 тестов coUnit пройдены, JUnit XML, остановка рантайма" src="docs/media/demo-codesys-job.gif" width="900">
+</p>
+<p align="center"><sub>Те же команды, что выполняет задание <code>plc-codesys.yml</code> на раннере, — реальный прогон на CODESYS 3.5.17.30 и CODESYS Control Win V3 (16.10.2026), снято term2gif</sub></p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/shot-codesys-summary-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/shot-codesys-summary-light.png">
+    <img alt="Сводка задания CODESYS с упавшим тестом: таблица шагов с ошибкой cds.py test, сборка без ошибок, 18 тестов — 17 пройдено и 1 упал, таблица упавших тестов с сообщением coUnit, Static Analysis Light без находок" src="docs/media/shot-codesys-summary-light.png" width="760">
+  </picture>
+</p>
+<p align="center"><sub>Сводка <code>ci/summary.py</code> для <code>$GITHUB_STEP_SUMMARY</code> из локального пробного прогона <code>plc-codesys.yml</code> с намеренно сломанным тестом. Markdown — настоящий вывод скрипта, отрисован локально в стиле GitHub: на GitHub workflow ещё не запускались</sub></p>
 
 ## Архитектура
 
 ```mermaid
 flowchart LR
-    src["src/, tests/<br/>тексты ST"] --> lint["st_lint"]
-    src --> asm["assemble.py"] --> built["build/assembled/"]
-    built --> iec["iec_checker"]
-    built --> rusty["RuSTy --check"]
-    src --> imp["cds.py import"] --> proj["проект CODESYS"]
-    proj --> bld["cds.py build"] --> tst["cds.py test<br/>Control Win + coUnit"] --> rep["TEST_REPORT.md"]
-    proj -- "правки в IDE" --> exp["cds.py export"] --> src
+    pr(["pull request"]) --> static
+    push(["push в main, тег v*,<br/>workflow_dispatch"]) --> static
+
+    subgraph static["plc-static.yml · GitHub-hosted Linux"]
+        direction TB
+        py["ruff · mypy · pytest"] --> asm["assemble:<br/>склейка ST"] --> lint["st_lint --strict"]
+        lint --> iec["iec_checker v0.4"] --> rusty["RuSTy plc --check<br/>(необязательно)"]
+    end
+
+    subgraph codesys["plc-codesys.yml · self-hosted Windows, CODESYS 3.5.17.30"]
+        direction TB
+        guard["guard (GitHub-hosted):<br/>событие, ветка, форк, таймаут"] --> sa["Static Analysis Light"]
+        sa --> rt["рантайм: перезапуск,<br/>новое окно демо-режима 2 ч"]
+        subgraph test["cds.py test"]
+            direction TB
+            imp["импорт src/ и tests/"] --> bld["сборка"] --> dl["загрузка в<br/>Control Win V3"]
+            dl --> run["старт приложения"] --> cu["ожидание coUnit,<br/>чтение результатов"]
+        end
+        rt --> imp
+        cu --> junit["cds.py junit:<br/>JUnit XML"] --> pub["публикация: аннотации,<br/>сводка, артефакт"]
+    end
+
+    static -- "needs: static,<br/>только push и вручную" --> codesys
+    static --> out["$GITHUB_STEP_SUMMARY,<br/>аннотации file:line,<br/>артефакты build/"]
+    codesys --> out
 ```
 
-Подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- Pull request проходит только проверки без CODESYS: на машину с CODESYS попадает лишь код,
+  который уже в `main`, в теге или запущен владельцем вручную.
+- Оба workflow вызывают инструменты самого репозитория-потребителя (`tools/` шаблона:
+  `assemble.py`, `check/`, `codesys/cds.py`), а свои скрипты `ci/` — сводку, проверку раннера,
+  Static Analysis Light — берут из того же коммита plc-ci-toolkit, что и сам workflow.
+- Результаты coUnit `cds.py` читает из переменных приложения в рантайме, а не из файла xUnit:
+  почему — [docs/cfunit_results.md](docs/cfunit_results.md).
+- Правила Static Analysis Light скрипт включает на время сеанса и запускает генерацию кода: штатного
+  API для этого в CODESYS 3.5.17 нет — [docs/sa_light.md](docs/sa_light.md).
 
-## Почему такая раскладка
+Подробно, со схемой скриптов и файлов отчётов, — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- **Один объект CODESYS — один файл или папка** (`src/POUs/FB_Example/FB_Example.decl.st`,
-  `Reset.method.impl.st`, `Count.get.impl.st`...). Дифф в pull request показывает, какой метод
-  изменился, а не «изменился бинарный файл».
-- **Объявление и тело — разные файлы**, как в редакторе CODESYS: импорт и экспорт однозначны,
-  и цикл «импорт → экспорт» без правок не должен давать диффа (критерий проверки скриптов).
-- **Склейка в стандартный ST** (`tools/assemble.py`) позволяет проверять код открытыми
-  инструментами — iec_checker и RuSTy — без лицензии и без Windows.
-- Контракт раскладки — [docs/LAYOUT.md](docs/LAYOUT.md), правила кода — [CONTRIBUTING.md](CONTRIBUTING.md).
+## Подключение за 10 минут
+
+Для репозитория на шаблоне plc-repo-template (`tools/`, `src/`, `tests/`, `requirements-dev.txt`).
+Пошагово, с проверками и разбором ошибок, — [docs/USAGE.md](docs/USAGE.md).
+
+1. **Локально — то же, что проверит CI**, чтобы первый запуск не был красным:
+
+   ```bash
+   python -m pip install -r requirements-dev.txt
+   python -m ruff check . && python -m ruff format --check . && python -m mypy && python -m pytest -q
+   python tools/check/st_lint.py --strict
+   ```
+
+2. **Вызывающий workflow** — копия [examples/consumer-ci.yml](examples/consumer-ci.yml) в
+   `.github/workflows/plc-ci.yml`; в двух строках `uses:` — владелец plc-ci-toolkit вместо
+   `<GITHUB_USER>`. Главное в нём:
+
+   ```yaml
+   jobs:
+     static:
+       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
+     codesys:
+       needs: static
+       if: >-
+         vars.PLC_CODESYS_RUNNER == 'true' && (github.event_name == 'workflow_dispatch' ||
+         (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))))
+       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+   ```
+
+3. **CI шаблона** `.github/workflows/ci.yml` — удалить (`plc-ci.yml` делает те же проверки и больше)
+   и перевести бейдж README на `plc-ci.yml`.
+4. **Ветка и pull request** — запустится задание «Проверки без CODESYS»; задание CODESYS для PR не
+   запускается никогда.
+5. **Settings → Actions → General**: «Workflow permissions» — только чтение; «Approval for running
+   fork pull request workflows» — **Require approval for all external contributors**.
+6. **Бейдж** в README: `[![PLC CI](https://github.com/<владелец>/<репозиторий>/actions/workflows/plc-ci.yml/badge.svg?branch=main)](https://github.com/<владелец>/<репозиторий>/actions/workflows/plc-ci.yml)`.
+7. **pre-commit** (по желанию): [examples/consumer/.pre-commit-config.yaml](examples/consumer/.pre-commit-config.yaml) —
+   ruff, `st_lint` и проверка «правки из IDE выгружены в `src/`» ([docs/pre_commit.md](docs/pre_commit.md)).
+
+Часть с CODESYS — один раз на машину, около часа (в основном установка CODESYS): раннер с меткой
+`codesys` под отдельной учётной записью ([docs/runner_setup.md](docs/runner_setup.md)), регистрация
+и первый ручной запуск ([docs/MANUAL_STEPS.md, разделы 9–13](docs/MANUAL_STEPS.md#9-self-hosted-раннер-порядок-действий)),
+затем переменная репозитория `PLC_CODESYS_RUNNER=true`. Без неё задание CODESYS пропускается.
+
+## Что проверяется
+
+| Задание | Проверка | Блокирует | Отчёт |
+|---|---|---|---|
+| `plc-static.yml` (Linux) | ruff, ruff format, mypy, pytest для `tools/` | да | сводка, `build/pytest.xml` |
+| | `assemble` → `st_lint --strict`: раскладка, заголовки POU, имена, «магические числа» | да | аннотации `file:line`, `build/st_lint.json` |
+| | iec_checker v0.4 (бинарник по SHA-256) или образ nightly (по дайджесту) | да, настраивается | необоснованные находки — аннотациями, `build/iec_checker.md` |
+| | RuSTy v1.0.6 `plc --check`: синтаксис и типы совместимого подмножества | нет, настраивается | аннотации, `build/rusty.log` |
+| `plc-codesys.yml` (Windows) | Static Analysis Light (6 правил) с базовой линией `ci/sa_baseline.json` | новые находки | `build/sa_report.md` в сводке |
+| | `cds.py test`: импорт, сборка CODESYS, загрузка, прогон coUnit | да | ошибки компилятора — аннотациями по `src/`, `build/test-results.json` |
+| | `cds.py junit` → публикация JUnit (`mikepenz/action-junit-report`, только аннотации) | нет: упавший тест валит `cds.py test` | таблица тестов в сводке, `build/junit.xml` |
+| pre-commit | ruff, `st_lint`, `codesys-sources-exported` | коммит | вывод хука |
+
+Итог задания — выход `result` (`success`/`failure`) и счётчики (`tests`, `failed`, `build-errors`,
+`st-lint-errors`...) для следующих заданий; все входы и выходы — [docs/USAGE.md](docs/USAGE.md),
+разделы 4–5.
+
+## Безопасность self-hosted раннера
+
+GitHub не рекомендует self-hosted раннеры для публичных репозиториев: pull request из форка может
+выполнить свой код на машине. Что сделано ([docs/runner_security.md](docs/runner_security.md)):
+
+- **Политика запуска.** Задание CODESYS — только `push` в `main` и теги, `workflow_dispatch` и
+  `schedule`; никогда `pull_request`, `pull_request_target`, `workflow_run` и не в форках. Это
+  условие вызывающего workflow и задание `guard` в `plc-codesys.yml`: оно выполняется на
+  GitHub-hosted раннере и отказывает до того, как задание попадёт на машину с CODESYS (разрешённые
+  события перечислены явно — новое событие по умолчанию запрещено).
+- **YAML не защищает от PR, который меняет сам workflow**, — поэтому обязательное одобрение запусков
+  для всех внешних участников (Settings → Actions) и, по желанию, окружение с одобрением.
+- **Минимальные права.** `contents: read` у заданий, `permissions: {}` у `guard`; JUnit публикуется
+  аннотациями и сводкой без check run, секреты GitHub заданию не нужны.
+- **Закреплённые actions.** Все `uses:` — по полному SHA коммита с комментарием версии
+  (тест `ci/tests/test_workflows.py`); обновления — Dependabot с выдержкой 7 дней.
+- **Машина.** Отдельная учётная запись без прав администратора, рантайм CODESYS с включённым
+  управлением пользователями, рантайм останавливается в конце задания (порты закрыты в простое),
+  рабочий каталог очищается; сеть раннера — без доступа к ПЛК и SCADA.
 
 ## Быстрый старт без железа
 
-Нужен Python 3.11+ (в CI — 3.12). CODESYS не нужен.
+Проверить сам plc-ci-toolkit можно без CODESYS (Python 3.11+):
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate              # Windows: .venv\Scripts\activate
 python -m pip install -r requirements-dev.txt
+python -m pytest                     # скрипты ci/ и инструменты шаблона
+python -m ruff check . && python -m ruff format --check . && python -m mypy
+python -m pre_commit run --all-files # ruff, st_lint, «исходники выгружены»
+actionlint                           # workflow; настройки — .github/actionlint.yaml
+```
 
-python -m pytest                       # тесты инструментов
-python tools/check/st_lint.py --strict # правила CONTRIBUTING.md: заголовки, имена, «магические числа»
-python tools/assemble.py --tests       # стандартный ST в build/assembled/
+Шаги Linux-задания на собственном примере ST — те же команды, что в `plc-static.yml`:
 
-# статанализ: бинарник iec_checker v0.4 из релизов (--binary <путь> или переменная IEC_CHECKER)
-# или Docker-образ (--docker jubnzv1/iec-checker:nightly)
-python tools/check/run_iec_checker.py --binary <путь к iec_checker> --tests
-# необязательно: проверка компиляции RuSTy (бинарник plc и stdlib из релиза PLC-lang/rusty v1.0.6)
+```bash
+python tools/assemble.py --tests
+python tools/check/st_lint.py --strict
+python tools/check/run_iec_checker.py --binary <путь к iec_checker v0.4> --tests
 python tools/check/run_rusty.py --plc <путь к plc> --stdlib <stdlib/include>
 ```
 
-Отчёты — в `build/` (`iec_checker.md`, `rusty.log`). Опции инструментов — в
-[tools/README.md](tools/README.md).
-
-## CODESYS: импорт, сборка, тесты, экспорт
-
-Нужны Windows, CODESYS 3.5.17.30 и Python 3.11+. Всё делает одна команда `tools/codesys/cds.py`:
-она запускает CODESYS без окна (`--noUI`) со скриптами CODESYS Scripting, а тесты coUnit — в
-CODESYS Control Win V3, запущенном пользовательским процессом (без прав администратора).
-
-| Команда (из корня репозитория; cmd, PowerShell или Git Bash) | Что делает |
-|---|---|
-| `python tools/codesys/cds.py import` | `src/` → `build/<имя>.project` |
-| `python tools/codesys/cds.py build` | импорт и сборка; ошибки — с файлом и строкой в `src/` |
-| `python tools/codesys/cds.py test` | `src/` + `tests/` → сборка → прогон в рантайме → `build/test-results.json`, `build/junit.xml` |
-| `python tools/codesys/cds.py roundtrip` | импорт → экспорт → побайтное сравнение с `src/` и `tests/` |
-| `python tools/codesys/cds.py export` | после правок в IDE: проект → `src/` (до коммита) |
-| `python tools/codesys/cds.py report` | итоги прогона → `docs/TEST_REPORT.md` |
-| `python tools/codesys/cds.py runtime status` | рантайм; также `start`, `stop`, `restart`, `init` |
-
-Путь к CODESYS и профиль — переменные `CODESYS_EXE`, `CODESYS_PROFILE` (без них — стандартный путь
-установки 3.5.17.30); настройки проекта, устройства, задач и библиотек — `tools/codesys/config.json`.
-Проверено в CODESYS 3.5.17.30 / CODESYS Control Win V3 (пользовательский процесс): сборка без ошибок
-и предупреждений, тесты coUnit зелёные, цикл «импорт → экспорт» без диффа — см.
-[docs/TEST_REPORT.md](docs/TEST_REPORT.md). Установка и первый запуск —
-[docs/MANUAL_STEPS.md](docs/MANUAL_STEPS.md), все опции и переменные —
-[tools/README.md](tools/README.md#codesyscdspy--codesys-из-консоли). Правило: правили в IDE —
-`cds.py export` в `src/` до коммита.
-
-## Как создать проект из шаблона
-
-1. На GitHub: **Use this template → Create a new repository**.
-2. Заменить плейсхолдеры `<ИМЯ ФАМИЛИЯ>` и `<GITHUB_USER>` (LICENSE, README, CONTRIBUTING.md, заголовки ST):
-   `git grep -n -e "<ИМЯ ФАМИЛИЯ>" -e "<GITHUB_USER>"`.
-3. Удалить пример (`FB_Example`, `ST_Example*`, константы `EXAMPLE_*`) или переименовать под задачу.
-4. Обновить `CHANGELOG.md`, `docs/ASSUMPTIONS.md` и `tools/codesys/config.json`.
-
-## Зеркало на GitVerse или GitFlic
+С CODESYS 3.5.17.30 на Windows — шаги Windows-задания по порядку (как на демонстрации выше):
 
 ```bash
-git remote add mirror <url>
-git push mirror --all
-git push mirror --tags
+python tools/codesys/cds.py build
+python ci/sa_check.py --root .
+python ci/sa_report.py --root .
+python tools/codesys/cds.py runtime restart
+python tools/codesys/cds.py test --clean
+python tools/codesys/cds.py junit
+python tools/codesys/cds.py runtime stop
 ```
+
+Пример ST в `src/` и `tests/` (насос подкачки и 18 тестов coUnit) — из шаблона, без изменений: это
+тестовый стенд, на котором CI проверяет сами workflow. Команды `cds.py` и раскладка —
+[tools/README.md](tools/README.md), [docs/LAYOUT.md](docs/LAYOUT.md).
 
 ## Тесты и проверки
 
 | Проверка | Где | Что |
 |---|---|---|
-| ruff, mypy, pytest | CI | код инструментов на Python |
-| `st_lint --strict` | CI | раскладка, заголовки POU, табы, длина строки, `TODO` без issue, «магические числа» |
-| iec_checker | CI: v0.4 (как локально) — обязательно; образ `nightly` — необязательно | статанализ; находки — в [docs/STATIC_ANALYSIS.md](docs/STATIC_ANALYSIS.md) |
-| RuSTy `plc --check` | CI, необязательно | синтаксис и типы собранного ST |
-| сборка CODESYS 3.5.17.30 | Windows с CODESYS: `cds.py build` | ошибки и предупреждения компилятора — `build/build.log` |
-| CfUnit (coUnit 1.2.0.0) | Windows с CODESYS: `cds.py test` (Control Win V3) | юнит-тесты ST; итоги — в [docs/TEST_REPORT.md](docs/TEST_REPORT.md) |
-| roundtrip | Windows с CODESYS: `cds.py roundtrip` | «импорт → экспорт» без диффа, повторный импорт без изменений |
+| actionlint 1.7.12 | CI (`ci.yml`) | четыре workflow и пример `examples/consumer-ci.yml` (входы сверяются с переиспользуемыми workflow) |
+| pytest `ci/tests` | CI: Linux (Python 3.11, 3.13), Windows (3.11) | сводка, проверка раннера, Static Analysis Light, хук pre-commit, правила безопасности workflow |
+| `plc-static.yml` на собственном примере | CI (`ci.yml`), локальный вызов `./.github/workflows/` | тот же вызов, что у потребителя; отдельно — с образом iec_checker nightly (не блокирует) |
+| `plc-codesys.yml` на собственном примере | workflow `codesys.yml`, self-hosted Windows | включается переменной `PLC_CODESYS_RUNNER` |
+
+**Пробный прогон 16.10.2026 на этой машине.** Шаги обоих workflow выполнены локально в том же
+порядке и с теми же условиями `if:`, на собственном примере ST:
+
+- Linux-задание — в Git Bash, с Windows-сборками iec_checker v0.4 и RuSTy v1.0.6 вместо загрузки
+  Linux-бинарников: все 17 шагов зелёные, pytest — 463 теста, `st_lint` — 0 замечаний,
+  iec_checker — 0 необоснованных находок, RuSTy — 0 ошибок. С внесённым «магическим числом»
+  задание падает, сводка и аннотация указывают на файл и строку.
+- Windows-задание — в той же обёртке Windows PowerShell 5.1, что у раннера, с CODESYS 3.5.17.30 и
+  Control Win V3: Static Analysis Light — 0 находок, рантайм перезапущен (окно 120 мин),
+  18 из 18 тестов coUnit, JUnit, `result=success`. Со сломанным тестом задание падает, JUnit и
+  сводка называют тест и сообщение coUnit; с ошибкой компиляции — аннотация на строке в `src/`;
+  без CODESYS шаг падает с кодом 3, и этот код виден в журнале шага.
+- Подключение к чистому репозиторию из шаблона по [docs/USAGE.md](docs/USAGE.md) (копия
+  `examples/consumer-ci.yml`, CI шаблона удалён): оба задания зелёные — 311 тестов pytest шаблона,
+  0 находок Static Analysis Light (правила — по умолчанию из plc-ci-toolkit, базовой линии нет),
+  18 из 18 тестов coUnit; Windows-задание — и в каталоге с пробелами и скобками в пути.
+
+На GitHub workflow ещё не запускались — это первый push (см. «Ограничения»).
 
 ## Документация
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — схема работы и пример в `src/`
-- [LAYOUT.md](docs/LAYOUT.md) — контракт раскладки исходников
-- [MANUAL_STEPS.md](docs/MANUAL_STEPS.md) — шаги в IDE CODESYS
-- [ASSUMPTIONS.md](docs/ASSUMPTIONS.md) — допущения и решения
-- [STATIC_ANALYSIS.md](docs/STATIC_ANALYSIS.md), [TEST_REPORT.md](docs/TEST_REPORT.md),
-  [BUILD_ERRORS.md](docs/BUILD_ERRORS.md) — отчёты
-- [TZ_template.md](docs/TZ_template.md) (ГОСТ 34.602-2020), [PMI_template.md](docs/PMI_template.md) — шаблоны ТЗ и ПМИ
+- [USAGE.md](docs/USAGE.md) — подключение, входы и выходы workflow, политика запуска, версии, бейджи
+- [runner_setup.md](docs/runner_setup.md) — Windows-раннер с CODESYS: учётная запись, рантайм, служба, демо-режим 2 ч
+- [runner_security.md](docs/runner_security.md) — риски self-hosted раннера, меры, чек-лист
+- [MANUAL_STEPS.md](docs/MANUAL_STEPS.md) — регистрация раннера и первый прогон (разделы 9–14), выпуск (раздел 17)
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — как устроены workflow и скрипты `ci/`
+- [cfunit_results.md](docs/cfunit_results.md) — как coUnit отдаёт результаты; обёртка `GVL_TestResults` в [examples/st/](examples/st/)
+- [sa_light.md](docs/sa_light.md) — Static Analysis Light скриптом, отчёт и базовая линия
+- [pre_commit.md](docs/pre_commit.md) — хуки pre-commit
+- [ASSUMPTIONS.md](docs/ASSUMPTIONS.md) — допущения и решения (разделы E, W, S — про CI)
+- [STATIC_ANALYSIS.md](docs/STATIC_ANALYSIS.md), [TEST_REPORT.md](docs/TEST_REPORT.md) — отчёты по примеру ST
+- [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Ограничения и дальнейшие шаги
 
-- Сборка и тесты в CODESYS выполняются только на Windows с установленным CODESYS (не в CI GitHub):
-  перед релизом — `cds.py test` и `cds.py report`.
-- В раскладку не входят визуализации, дерево устройств, конфигураторы обмена, графические языки,
-  `ACTION`, а Persistent Variables скриптом SP17 не создаются — это ручные шаги
-  ([MANUAL_STEPS.md](docs/MANUAL_STEPS.md#6-работа-в-ide-и-экспорт-перед-коммитом)).
-- iec_checker и RuSTy понимают не все расширения CODESYS: для них есть упрощённые варианты сборки,
-  семантика которых может отличаться.
-- Тесты — на CfUnit 1.2.0.0 (пространство имён `coUnit`); фреймворк не развивается с 2022 года.
+- **Windows-задание на раннере ещё не проходило.** Критерий «сборка, тесты, JUnit в отчёте на раннере
+  владельца» подтверждает владелец по [MANUAL_STEPS.md, разделы 9–13](docs/MANUAL_STEPS.md#9-self-hosted-раннер-порядок-действий);
+  до этого бейдж CODESYS статичный.
+- **На GitHub workflow ещё не запускались.** Выгрузка скриптов `ci/` через `job.workflow_repository`
+  и `job.workflow_sha` и очередь `concurrency.queue: max` описаны в документации GitHub, но
+  actionlint 1.7.12 их не знает (отфильтровано в `.github/actionlint.yaml`) — проверит первый запуск
+  ([ASSUMPTIONS.md, W3–W4](docs/ASSUMPTIONS.md#переиспользуемые-workflow-plc-ci-toolkit)). Локально
+  actionlint работал без shellcheck; в CI его задание проверяет скрипты shellcheck.
+- **Нужен свой раннер.** У GitHub нет раннеров с CODESYS. Рантайм без лицензии работает 2 ч —
+  задание перезапускает его и не может длиться дольше 110 мин; рантайм один на машину, поэтому
+  задания идут по очереди.
+- **Static Analysis Light** включается через внутренние имена CODESYS 3.5.17.30: в другой версии
+  скрипт откажет с кодом 3, тогда — ручной шаг ([MANUAL_STEPS.md, раздел 16](docs/MANUAL_STEPS.md#16-static-analysis-light-правила-в-ide)).
+  Правила платной версии Static Analysis недоступны.
+- **Раннер как служба Windows** с рантаймом в пользовательском процессе ещё не проверен
+  (ASSUMPTIONS.md, E8–E9); проверенный режим — интерактивный `run.cmd`.
+- iec_checker и RuSTy понимают не все расширения CODESYS; coUnit 1.2.0.0 не развивается с 2022 года.
 
 ## Summary (EN)
 
-A template repository for CODESYS V3.5 (3.5.17.30) PLC projects targeting OWEN PLC210.
-The binary `.project` file is not stored in git: plain-text Structured Text files in `src/` and
-`tests/` (one CODESYS object per file or folder, see `docs/LAYOUT.md`) are the source of truth.
-A single command, `python tools/codesys/cds.py import|build|test|export|roundtrip`, drives headless
-CODESYS Scripting (IronPython) to build the project from the sources and export IDE edits back.
-`tools/assemble.py` merges the sources into standard IEC 61131-3 ST, so CI on Linux can run a
-linter, the iec_checker static analyser and the RuSTy compiler without a CODESYS licence.
-CfUnit (coUnit 1.2.0.0) unit tests run in a user-mode CODESYS Control Win V3 runtime. Docs are in Russian.
+CI toolkit for CODESYS V3.5 (3.5.17.30) PLC repositories built from the plc-repo-template. Reusable
+workflow `plc-static.yml` runs ruff, mypy, pytest, ST assembly, the `st_lint` linter, iec_checker and
+an optional RuSTy check on GitHub-hosted Linux; `plc-codesys.yml` runs on a self-hosted Windows runner:
+Static Analysis Light with a baseline, import, build, download to CODESYS Control Win V3, coUnit tests
+read from runtime variables, JUnit published as annotations and a job summary with read-only tokens.
+The Windows job never runs on pull requests (a guard job enforces it); all actions are pinned by SHA.
+A pre-commit hook blocks commits with IDE edits not exported to `src/`. All steps were dry-run locally
+with real CODESYS; the first GitHub run is pending. Docs are in Russian.
 
 ## Лицензия
 

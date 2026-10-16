@@ -3,17 +3,30 @@
 # правила, которые предлагают синтаксис Python 3 (pyupgrade и др.).
 
 [project]
-name = "plc-repo-template-tools"
+name = "plc-ci-toolkit"
 version = "0.1.0"
-description = "Инструменты шаблона ПЛК-репозитория: раскладка ST, сборка, линтер, проверки"
+description = "CI для ПЛК-репозиториев на CODESYS: проверки, переиспользуемые workflow, хуки pre-commit"
 requires-python = ">=3.11"
+
+# Пакет нужен только pre-commit: хук из .pre-commit-hooks.yaml (language: python) ставится
+# командой pip install . в отдельное окружение. Устанавливается один модуль ci/check_exported.py.
+[project.scripts]
+check-codesys-exported = "check_exported:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "ci" }
+py-modules = ["check_exported"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
 extend-exclude = ["build"]
-# Каталоги модулей проекта (для сортировки импортов: first-party)
-src = ["tools", "tools/codesys", "tools/check", "tools/tests"]
+# Каталоги модулей проекта (для сортировки импортов: first-party); ci/ — скрипты plc-ci-toolkit для GitHub Actions
+src = ["tools", "tools/codesys", "tools/check", "tools/tests", "ci", "ci/tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "RUF"]
@@ -26,17 +39,18 @@ ignore = [
 [tool.ruff.format]
 # Скрипты CODESYS форматируются вручную: форматтер ruff рассчитан на Python 3 и может
 # добавить запятую после *args/**kwargs, а это SyntaxError в IronPython 2.7.
-exclude = ["tools/codesys/*.py"]
+exclude = ["tools/codesys/*.py", "ci/codesys/*.py"]
 
 [tool.ruff.lint.per-file-ignores]
 # Общее подмножество Python 2.7 и 3.x: __future__, "%"-форматирование, class X(object),
 # без f-строк, распаковки [*a], raise ... from, contextlib.suppress
 "tools/codesys/*.py" = ["UP", "SIM", "C4", "B904", "RUF005", "RUF012"]
+"ci/codesys/*.py" = ["UP", "SIM", "C4", "B904", "RUF005", "RUF012"]
 
 [tool.mypy]
 python_version = "3.11"
-files = ["tools"]
-mypy_path = ["tools", "tools/codesys", "tools/check"]
+files = ["tools", "ci"]
+mypy_path = ["tools", "tools/codesys", "tools/check", "ci"]
 strict = true
 warn_unreachable = true
 # Скрипты CODESYS (IronPython 2.7) используют глобальные объекты среды CODESYS (projects,
@@ -44,11 +58,12 @@ warn_unreachable = true
 exclude = [
     '^tools/codesys/(?!stlayout\.py$)[^/]*\.py$',
     '^tools/tests/fixtures/',
+    '^ci/codesys/',
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tools/tests"]
-pythonpath = ["tools", "tools/codesys", "tools/check"]
+testpaths = ["tools/tests", "ci/tests"]
+pythonpath = ["tools", "tools/codesys", "tools/check", "ci"]
 addopts = "-ra --strict-markers"
 markers = [
     "integration: проверки с настоящими plc (RuSTy) и iec_checker; пропускаются, если инструмента нет",
