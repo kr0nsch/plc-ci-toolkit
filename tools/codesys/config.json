@@ -108,7 +108,16 @@
       "namespace — пространство имён ссылки в проекте (по умолчанию — из библиотеки); placeholder — ссылка-плейсхолдер #имя; qualified_only — true/false.",
       "Если нужной версии нет: install_from — файл .library; build_from_repo — репозиторий, где cds.py соберёт её командой library --install.",
       "Пример библиотеки портфолио: \"plc-process-lib\": {\"namespace\": \"PL\", \"title_contains\": \"plc-process-lib\", \"version\": \"1.0.0.0\", \"build_from_repo\": {\"env\": \"PL_REPO\", \"default\": \"../plc-process-lib\"}, \"install_from\": {\"env\": \"PL_LIBRARY\", \"default\": null}}"
-    ]
+    ],
+    "standard": {
+      "label": "Standard (плейсхолдер #Standard, версию задаёт профиль CODESYS)",
+      "title": "Standard",
+      "company": "System",
+      "version": "*",
+      "placeholder": "Standard",
+      "namespace": "Standard",
+      "qualified_only": false
+    }
   },
   "runtime": {
     "title": "CODESYS Control Win V3 (пользовательский процесс)",
@@ -214,7 +223,9 @@
     "exclude": [
       "PRG_Main"
     ],
-    "libraries": [],
+    "libraries": [
+      "standard"
+    ],
     "path": {
       "env": "CDS_LIBRARY",
       "default": "build/{name}.library"
