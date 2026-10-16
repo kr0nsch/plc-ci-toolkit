@@ -1,12 +1,19 @@
 # Ручные шаги
 
-Шаги, которые выполняет человек в консоли Windows и в IDE CODESYS. Всё, что можно выполнить без
-CODESYS (сборка текстов, линтер, статанализ), описано в [README](../README.md#быстрый-старт-без-железа)
-и выполняется в CI.
+Шаги, которые выполняет человек: в консоли Windows, в IDE CODESYS и в настройках GitHub. Всё, что
+можно выполнить без CODESYS (сборка текстов, линтер, статанализ), выполняется в CI.
+
+Для plc-ci-toolkit главное — **разделы 9–14**: подготовка self-hosted раннера, его регистрация и
+первый прогон Windows-job. Критерий готовности «Windows-job хотя бы раз прошёл на моём раннере:
+сборка, тесты, JUnit в отчёте» подтверждает владелец ([раздел 13](#13-что-подтверждает-владелец)).
+Разделы 1–8 — общие шаги шаблона: они нужны и на машине раннера (CODESYS, coUnit, переменные,
+рантайм), и для работы с примером ST в `src/` и `tests/`.
 
 Команды разделов 3–7 проверены прогоном на CODESYS V3.5 SP17 Patch 3 (3.5.17.30, 32-битная сборка
-ОВЕН) и CODESYS Control Win V3 в пользовательском процессе (16.10.2026). Что не проверено — отмечено
-явно. Подробности об инструменте — [tools/README.md](../tools/README.md#codesyscdspy--codesys-из-консоли).
+ОВЕН) и CODESYS Control Win V3 в пользовательском процессе (16.10.2026). Разделы 9–14 — процедура
+для первого запуска: приложение раннера на этой машине ещё не регистрировалось, поэтому в них
+отмечено, что проверено заранее, а что проверит первый прогон. Подробности об инструменте —
+[tools/README.md](../tools/README.md#codesyscdspy--codesys-из-консоли).
 
 ## 1. Установка CODESYS 3.5.17.30
 
@@ -216,3 +223,275 @@ setx CODESYS_PROFILE "CODESYS V3.5 SP17 Patch 3"
    ```
 
 3. После каждого релиза повторять `git push mirror --all` и `git push mirror --tags`.
+
+## 9. Self-hosted раннер: порядок действий
+
+Windows-job — задание `codesys` переиспользуемого workflow `plc-codesys.yml`: импорт `src/` и
+`tests/` в проект, сборка, загрузка в CODESYS Control Win V3, прогон coUnit, JUnit XML и сводка.
+Где он запускается:
+
+- в plc-ci-toolkit — workflow **CODESYS** (`.github/workflows/codesys.yml`): самопроверка на примере
+  ST шаблона (18 тестов в двух наборах);
+- в репозитории-потребителе (первым — библиотека `plc-process-lib`) — задание `codesys` его CI по
+  образцу [examples/consumer-ci.yml](../examples/consumer-ci.yml).
+
+Раннер регистрируется для каждого такого репозитория отдельно. Для критерия готовности достаточно
+одного успешного прогона; порядок — сначала plc-ci-toolkit, затем библиотека (те же шаги 3–6).
+
+| № | Действие | Кто и где | Подробно |
+|---|---|---|---|
+| 1 | Машина, учётная запись `codesys-ci`, CODESYS 3.5.17.30, coUnit, Python, Git | администратор, Windows | [runner_setup.md, разделы 1–3](runner_setup.md#1-схема), здесь — разделы 1–2 |
+| 2 | `cds.py build` и `cds.py test` под `codesys-ci` | `codesys-ci`, консоль | [runner_setup.md, раздел 4](runner_setup.md#4-первая-проверка-под-учётной-записью-раннера) |
+| 3 | Настройки репозитория | владелец, GitHub | [раздел 10](#10-настройки-репозитория-на-github) |
+| 4 | Регистрация раннера и `run.cmd` | `codesys-ci` и GitHub | [раздел 11](#11-регистрация-раннера) |
+| 5 | Ручной запуск Windows-job | владелец, GitHub | [раздел 12](#12-первый-прогон-windows-job) |
+| 6 | Подтверждение и запись результата | владелец | [раздел 13](#13-что-подтверждает-владелец) |
+
+Риски и почему настройки именно такие — [runner_security.md](runner_security.md).
+
+## 10. Настройки репозитория на GitHub
+
+В каждом репозитории с Windows-job, до регистрации раннера. Settings → Actions → General:
+
+1. **Actions permissions** — «Allow <GITHUB_USER>, and select non-<GITHUB_USER>, actions and
+   reusable workflows»: отметить «Allow actions created by GitHub» и добавить в список
+   `mikepenz/action-junit-report@*`. Переиспользуемые workflow plc-ci-toolkit — свои, они разрешены.
+2. **Approval for running fork pull request workflows from contributors** — «Require approval for
+   all external contributors».
+3. **Workflow permissions** — права только на чтение (`contents` и `packages`); флажок «Allow GitHub
+   Actions to create and approve pull requests» снят.
+4. Нажать **Save** в каждом блоке.
+
+По желанию: Settings → Rules → Rulesets — правило для `main` (запрет принудительного push и
+удаления); окружение `codesys` — [runner_security.md, раздел 3.3](runner_security.md#33-окружение-с-обязательным-одобрением)
+(пока `plc-codesys.yml` окружение не объявляет, правило ни на что не влияет).
+
+Переменную `PLC_CODESYS_RUNNER` пока не создавать: без раннера задание ждало бы его в очереди
+до 24 часов и завершилось бы ошибкой. Её создаёт шаг 7 раздела 11.
+
+## 11. Регистрация раннера
+
+Перед началом: выполнены разделы 1–2 этого документа и разделы 2–4 [runner_setup.md](runner_setup.md)
+(под `codesys-ci` зелёные `cds.py build` и `cds.py test`). Для каждого репозитория — свой каталог
+и своя регистрация; ниже — для plc-ci-toolkit.
+
+1. Войдите в Windows под `codesys-ci` («Пуск» → пользователь → «Сменить пользователя») и откройте
+   **Windows PowerShell без прав администратора**.
+2. В браузере откройте репозиторий на GitHub → Settings → Actions → Runners → **New self-hosted
+   runner** → Runner image **Windows**, Architecture **x64**. Чтобы не оставлять сеанс GitHub в
+   профиле `codesys-ci`, откройте страницу в окне InPrivate и закройте его после шага 4. _Вместо
+   этого можно открыть консоль `codesys-ci` в своём сеансе (`runas /user:codesys-ci powershell`) и
+   копировать команды из своего браузера; что рантайм CODESYS в таком окне работает так же, как в
+   полном сеансе, не проверено._
+3. Создайте каталог и выполните блок **Download** со страницы как есть: он скачивает архив раннера
+   текущей версии, **сверяет SHA-256** (строка с `Get-FileHash` — не пропускать; при «Computed
+   checksum did not match» — остановиться) и распаковывает его:
+
+   ```powershell
+   mkdir C:\actions-runner\plc-ci-toolkit
+   cd C:\actions-runner\plc-ci-toolkit
+   # далее — команды блока Download со страницы GitHub (Invoke-WebRequest, Get-FileHash, распаковка)
+   ```
+
+4. Выполните команду из блока **Configure**, добавив имя и метку (токен — со страницы, действует
+   час; не сохраняйте и не пересылайте его):
+
+   ```powershell
+   .\config.cmd --url https://github.com/<GITHUB_USER>/plc-ci-toolkit --token <токен> --name codesys-01 --labels codesys --work _work
+   ```
+
+   На вопрос «Would you like to run the runner as service? (Y/N)» ответьте **N**: первый прогон —
+   интерактивный ([runner_setup.md, раздел 7.2](runner_setup.md#72-интерактивный-запуск--для-первого-прогона)).
+   Ожидается сообщение об успешной регистрации и «Settings Saved».
+5. Запустите раннер и не закрывайте окно:
+
+   ```powershell
+   .\run.cmd
+   ```
+
+   Ожидается «Connected to GitHub» и «Listening for Jobs». Можно вернуться в свой сеанс Windows
+   («Сменить пользователя»): сеанс `codesys-ci` и раннер продолжат работать.
+6. На GitHub: Settings → Actions → Runners — раннер `codesys-01` в состоянии **Idle**, метки
+   `self-hosted`, `Windows`, `X64`, `codesys`.
+7. Settings → Secrets and variables → Actions → вкладка **Variables** → New repository variable:
+   имя `PLC_CODESYS_RUNNER`, значение `true`.
+
+Для `plc-process-lib` — те же шаги с каталогом `C:\actions-runner\plc-process-lib`, URL библиотеки и
+её токеном, под той же учётной записью `codesys-ci` (тогда задания двух репозиториев делят рантайм
+по очереди — [runner_setup.md, раздел 7.1](runner_setup.md#71-каталог-метки-число-раннеров)).
+Каждый раннер — своё окно `run.cmd`. Перевод раннера в службу Windows — после успешного первого
+прогона, по [runner_setup.md, раздел 7.3](runner_setup.md#73-служба-windows-под-учётной-записью-codesys-ci).
+
+## 12. Первый прогон Windows-job
+
+1. На машине раннера (под `codesys-ci`): IDE CODESYS закрыта; служба рантайма остановлена —
+   `sc query "CODESYS Control Win V3"` показывает `STOPPED`; другие пользователи рантайм не
+   запускали ([runner_setup.md, раздел 6.1](runner_setup.md#61-вариант-а-пользовательский-процесс-под-управлением-cdspy)).
+2. На GitHub: репозиторий → **Actions** → workflow **CODESYS** → **Run workflow** → ветка `main` →
+   **Run workflow**. В репозитории-потребителе — workflow его CI (в образце — **PLC CI**). Из консоли
+   с установленным GitHub CLI то же самое: `gh workflow run codesys.yml --ref main`.
+3. Что должно произойти:
+   - задание **guard** (GitHub-hosted Linux, секунды) завершается строкой
+     `разрешено: workflow_dispatch refs/heads/main`;
+   - задание **codesys** ждёт раннер, окно `run.cmd` показывает «Running job»; шаги по порядку:
+     выгрузка репозитория и plc-ci-toolkit, «Проверка раннера», «Static Analysis Light (SA)»,
+     «Рантайм — перезапуск», `cds.py test`, `cds.py junit`, «Публикация JUnit», «Сводка»,
+     «Рантайм — остановка», «Артефакты»;
+   - длительность — минуты: шаг `cds.py test` на примере шаблона — около 20 секунд после
+     перезапуска рантайма, шаг Static Analysis Light — ещё одна сборка; первый запуск дольше —
+     раннер скачивает actions.
+4. Где результат:
+   - страница запуска → **Summary**: таблица «CODESYS coUnit» (шаг публикации JUnit) и сводка
+     `ci/summary.py` — сборка, тесты, статанализ;
+   - журнал шага `cds.py test`: `[cds] test: OK (наборов 2, тестов 18, пройдено 18, упало 0,
+     пропущено 0, …)` и путь к `build\junit.xml`;
+   - артефакт **plc-codesys-reports**: `test.log`, `build.log`, `test-results.json`, `junit.xml`,
+     журналы `build/codesys/`.
+5. Не прошёл — [раздел 14](#14-если-windows-job-не-прошёл).
+
+## 13. Что подтверждает владелец
+
+Критерий спецификации: «Windows-job хотя бы раз прошёл на моём раннере: сборка, тесты, JUnit в
+отчёте». Подтверждено, если в одном запуске:
+
+- [ ] задание `codesys` выполнено на своём раннере: в шаге «Set up job» журнала — имя раннера
+  (`codesys-01`);
+- [ ] сборка без ошибок: в журнале `cds.py test` или в сводке — «ошибок 0»;
+- [ ] тесты coUnit выполнены и зелёные: упало 0 (для примера plc-ci-toolkit — 18 из 18);
+- [ ] JUnit в отчёте: в Summary есть таблица «CODESYS coUnit», в артефакте — `junit.xml`;
+- [ ] (по желанию) pull request из ветки не запускает задание `codesys`: в репозитории с «PLC CI» оно
+  «skipped», в plc-ci-toolkit workflow CODESYS для PR не запускается вовсе.
+
+Записать:
+
+1. В [TEST_REPORT.md](TEST_REPORT.md) — раздел «Windows-job на self-hosted раннере»: ссылка на
+   запуск (`https://github.com/<GITHUB_USER>/<репозиторий>/actions/runs/<id>`), дата, имя раннера,
+   CODESYS 3.5.17.30, число тестов. Раздел «Последний прогон в CODESYS» можно обновить по
+   результатам CI: скачать артефакт и выполнить
+   `python tools/codesys/cds.py report --results <каталог артефакта>\test-results.json`.
+2. В `CHANGELOG.md` — запись о первом прогоне; в README отметить критерий выполненным.
+
+## 14. Если Windows-job не прошёл
+
+| Признак | Причина | Что делать |
+|---|---|---|
+| задание `codesys` не появилось | нет переменной `PLC_CODESYS_RUNNER=true` или запуск не из `main` | раздел 11, шаг 7; запуск с ветки `main` |
+| guard: «событие … запрещено» или «push в … : разрешены только …» | запуск из PR или из другой ветки | запускать `workflow_dispatch` с `main`, push в `main` или тег `v*` |
+| «Waiting for a runner» долго | раннер выключен или без метки `codesys` | окно `run.cmd`, Settings → Actions → Runners (Idle, метки) |
+| «Python not found» | Python не установлен для всех пользователей | [runner_setup.md, раздел 3](runner_setup.md#3-программы) или вход `python` workflow |
+| перезапуск рантайма: «порт 11740 занят другим процессом» | запущена служба «CODESYS Control Win V3» или рантайм другого пользователя | остановить службу (администратор) или процесс другого пользователя |
+| `cds.py test`, код 3: проект «открыт в другом экземпляре CODESYS» | остался `CODESYS.exe` прерванного запуска | завершить процесс `CODESYS.exe` учётной записи `codesys-ci` (Диспетчер задач) |
+| `cds.py test`, код 3: не удался вход в рантайм | пользователь рантайма не создан или пароль не совпадает с `credentials.json` | создать пользователя вручную ([раздел 4](#4-рантайм-codesys-control-win-v3-без-прав-администратора)) под `codesys-ci` и повторить |
+| `cds.py test`, код 4 (таймаут) | диалог CODESYS в `--noUI` | [runner_setup.md, раздел 4](runner_setup.md#4-первая-проверка-под-учётной-записью-раннера): запустить IDE под `codesys-ci` и ответить на диалоги |
+| coUnit не найдена | библиотека не установлена | [раздел 2](#2-counit-cfunit-1200) или `COUNIT_LIBRARY` |
+| только для раннера-службы: рантайм не стартует или не принимает вход | нет виртуализации UAC в службе | [runner_setup.md, раздел 7.3](runner_setup.md#73-служба-windows-под-учётной-записью-codesys-ci): копия `GatewayPLC` или интерактивный запуск |
+
+Журналы — [runner_setup.md, раздел 10](runner_setup.md#10-журналы). Код выхода `cds.py` — в конце
+журнала шага, строка «Process completed with exit code N» (0 — успех, 1 — проверка не прошла,
+3 — окружение, 4 — таймаут, 5 — блокировка): шаги запускаются через `powershell -File`, который
+передаёт код без изменений.
+
+## 15. pre-commit в рабочей копии
+
+В каждом клоне репозитория (включая машину раннера, если там правят код) — один раз:
+
+```bat
+python -m pip install --user pre-commit
+python -m pre_commit install
+```
+
+Перед коммитом запускаются ruff, `st_lint` и проверка «исходники выгружены»: правки проекта
+CODESYS из IDE без `cds.py export` коммит остановят с подсказкой, что выполнить. Подробно —
+[pre_commit.md](pre_commit.md).
+
+## 16. Static Analysis Light: правила в IDE
+
+В CI и в консоли ручной шаг не нужен: `python ci/sa_check.py` включает правила Static Analysis
+Light на время анализа и генерирует код, `python ci/sa_report.py` строит отчёт
+([sa_light.md](sa_light.md)). Включать правила в IDE нужно, только чтобы видеть находки при
+работе в IDE, или если `sa_check.py` завершился с кодом 3 «внутренний API плагина
+StaticAnalysisManager отличается от 3.5.17.30» (другая версия CODESYS).
+
+1. Открыть **рабочий** проект (`build\<имя>.project`, [раздел 6](#6-работа-в-ide-и-экспорт-перед-коммитом)).
+   Тестовый проект не трогать: при включённых правилах любая находка даёт итог генерации кода
+   «… 1 ошибок …: загрузка невозможна» (проверено скриптом), а в тестовом проекте шаблона находки
+   есть (11 × SA0167 — экземпляры `fbDut` в методах-тестах).
+2. **Проект → Установки проекта...** → в списке категорий слева — **Static Analysis Light** →
+   вкладка **Доп. проверки компилятора**.
+3. Отметить правила (в Light их шесть):
+   - «Неиспользуемые переменные» (SA0033);
+   - «Перекрывающиеся области памяти» (SA0028);
+   - «Параллельный доступ» (SA0006);
+   - «Множественный доступ по записи на выходе» (SA0004);
+   - «Многократное использование имени» (SA0027);
+   - «Сообщать о временных экземплярах ФБ» (SA0167).
+
+   В IDE находка всегда ошибка: выбрать «предупреждение» диалог Light не даёт (это умеет только
+   `sa_check.py`, режим `warning` в `ci/sa_rules.json`).
+4. **OK**, сохранить проект (**Файл → Сохранить проект**), закрыть IDE.
+5. Проверить: **Компиляция → Генерировать код** (не **Компиляция → Компиляция**: обычная
+   компиляция правила Light не проверяет — проверено скриптом). Находки — в окне «Сообщения»,
+   категория **Доп. проверки кода**, строки вида `SA0033 … Неиспользуемый Переменная '…'`.
+   Итог — строка «Доп. проверки кода завершены -- N ошибки (-ок)».
+6. Если находки нужно сохранить в отчёт без `sa_check.py`: скопировать сообщения категории в
+   [BUILD_ERRORS.md](BUILD_ERRORS.md) (формат записи там же).
+
+Что ещё учесть:
+
+- Настройки хранятся в самом `.project` (скрытый объект «Установки проекта» — так их сохраняет
+  диалог IDE), а `.project` в git не хранится: в новом проекте (`--clean`, новый клон, CI) правила
+  снова выключены — в CI их включает `sa_check.py`. `cds.py import` в существующий проект установки
+  проекта не меняет, поэтому они должны сохраниться (не проверялось).
+- Подавить находку в коде: `{attribute 'analysis' := '-33'}` строкой перед объявлением переменной
+  или перед заголовком POU (номер правила с минусом), `{attribute 'no-analysis'}` — объект целиком
+  (проверено). Каждое подавление и каждую запись базовой линии `ci/sa_baseline.json` обосновать в
+  [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md).
+- _Названия меню и диалога взяты из локализации CODESYS 3.5.17.30 (`Settings\Standard (CODESYS V3.5
+  SP17 Patch 3).opt.menu`, ресурсы плагинов WorkspaceEditor, BuildCommands, StaticAnalysisManager);
+  в IDE эти шаги вручную не выполнялись — при расхождении поправить этот раздел._
+
+## 17. Выпуск plc-ci-toolkit и бейджи
+
+Репозитории-потребители вызывают workflow по тегу основной версии: `...plc-static.yml@v1`
+([USAGE.md, раздел 6](USAGE.md#6-версии-и-закрепление)). Тег ставит владелец, когда CI в `main`
+зелёный.
+
+1. Actions → **CI** для последнего коммита `main` — зелёный (задание `plc-static (пример ST)`
+   заодно проверяет выгрузку скриптов по `job.workflow_repository` и `job.workflow_sha`), и
+   workflow **CODESYS** для того же коммита — не «Invalid workflow file»: зелёный или с
+   пропущенным заданием, если раннера ещё нет. GitHub разбирает `plc-codesys.yml` и при
+   пропущенном задании, а `concurrency.queue` и свойства `job.workflow_*` actionlint 1.7.12 не
+   проверяет — ошибка в них сломала бы у потребителей весь вызывающий workflow, включая проверки
+   pull request. В `CHANGELOG.md` раздел `[Unreleased]` переименован в версию с датой.
+2. Тег выпуска и подвижный тег основной версии (из чистой рабочей копии `main`):
+
+   ```bash
+   git switch main
+   git pull --ff-only
+   git tag -a v1.0.0 -m "plc-ci-toolkit v1.0.0" HEAD
+   git tag -f -a v1 -m "plc-ci-toolkit v1 -> v1.0.0" HEAD
+   git push origin v1.0.0
+   git push -f origin v1
+   ```
+
+   Команды одинаково работают в cmd, PowerShell и Git Bash. Push тега запускает workflow **CI** и
+   (с переменной `PLC_CODESYS_RUNNER`) **CODESYS** на этом коммите.
+   Следующие выпуски без несовместимых изменений: новый тег `v1.x.y`, затем те же две последние
+   команды для `v1`. Переименование или удаление входа, другой смысл выхода — новый основной тег
+   `v2`; потребители переходят на него сами.
+3. GitHub → **Releases** → **Draft a new release** → тег `v1.0.0`, описание — из `CHANGELOG.md`.
+4. В репозитории-потребителе ничего менять не нужно: `@v1` возьмёт новый коммит при следующем
+   запуске. Проверка — запуск **PLC CI** вручную.
+
+Бейджи README plc-ci-toolkit:
+
+- **CI** — динамический с самого начала (workflow `ci.yml` идёт на GitHub-hosted раннере).
+- **CODESYS** — пока статичный «pending first run»: задание без раннера пропускается, а что при этом
+  показывает бейдж GitHub, не проверено. После первого прогона по разделу 13 замените строку бейджа
+  в README на динамическую:
+
+  ```markdown
+  [![CODESYS](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/codesys.yml/badge.svg?branch=main)](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/codesys.yml)
+  ```
+
+Бейджи репозитория-потребителя — [USAGE.md, раздел 7](USAGE.md#7-бейджи).
