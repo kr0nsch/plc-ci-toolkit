@@ -1,0 +1,196 @@
+{
+  "build": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "codesys_version": "3.5.17.30",
+  "command": "python tools/codesys/cds.py test",
+  "commit": "a66fb78",
+  "device": "CODESYS Control Win V3 (4096 / 0000 0001 / 3.5.17.30)",
+  "ended": "2026-10-16T01:06:15",
+  "finished": true,
+  "framework": "coUnit (CfUnit) 1.2.0.0",
+  "import": {
+    "created": 0,
+    "moved": 0,
+    "removed": 0,
+    "updated": 0
+  },
+  "ok": true,
+  "profile": "CODESYS V3.5 SP17 Patch 3",
+  "project": "C:\\actions-runner\\_work\\plc-repo-template\\plc-repo-template\\build\\plc-repo-template-tests.project",
+  "repo": "plc-repo-template",
+  "runtime": "CODESYS Control Win V3 (пользовательский процесс)",
+  "runtime_process": {
+    "age_min": 21.2,
+    "boot_cfg": "C:\\Users\\cdsci-runner\\.local\\plc-tools\\cds-runtime\\boot.cfg",
+    "demo_left_min": 98.8,
+    "other_instances": [],
+    "pid": 7380,
+    "port": 11740,
+    "port_open": true,
+    "running": true,
+    "started": "2026-10-16T00:44:43.5402980+03:00"
+  },
+  "schema": 1,
+  "started": "2026-10-16T01:06:06",
+  "stored_general_results": true,
+  "suites": [
+    {
+      "cases": [
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "InsideRangeReturnsValue",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "BelowLowReturnsLow",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AboveHighReturnsHigh",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AtLowBoundaryReturnsLow",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AtHighBoundaryReturnsHigh",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "EqualBoundsReturnsBound",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbF_ClampTest",
+          "failure_type": null,
+          "message": null,
+          "name": "LowGreaterThanHighSwapsBounds",
+          "status": "PASS"
+        }
+      ],
+      "failed": 0,
+      "name": "PRG_Tests.fbF_ClampTest",
+      "path": "Device.Application.PRG_Tests.fbF_ClampTest",
+      "skipped": 0,
+      "tests": 7
+    },
+    {
+      "cases": [
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AutoSwitchesOnBelowThreshold",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AutoThresholdsAreInclusive",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AutoHoldsStateInsideHysteresis",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "InvalidValueLatchesFault",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AcknowledgeClearsFaultWhenValid",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "AcknowledgeKeepsFaultWhileInvalid",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "ManualFollowsCommand",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "LocalAndOutOfServiceSwitchOff",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "DefaultModeIsOutOfService",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "ParametersAreClamped",
+          "status": "PASS"
+        },
+        {
+          "class_name": "Device.Application.PRG_Tests.fbExampleTest",
+          "failure_type": null,
+          "message": null,
+          "name": "CountsSwitchOnsAndResetClears",
+          "status": "PASS"
+        }
+      ],
+      "failed": 0,
+      "name": "PRG_Tests.fbExampleTest",
+      "path": "Device.Application.PRG_Tests.fbExampleTest",
+      "skipped": 0,
+      "tests": 11
+    }
+  ],
+  "totals": {
+    "failed": 0,
+    "passed": 18,
+    "reported_failed": 0,
+    "reported_successful": 18,
+    "reported_suites": 2,
+    "reported_tests": 18,
+    "skipped": 0,
+    "suites": 2,
+    "tests": 18
+  },
+  "wait_s": 0.6
+}

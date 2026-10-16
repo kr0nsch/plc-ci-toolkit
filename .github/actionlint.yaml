@@ -1,0 +1,19 @@
+# Настройки actionlint (github.com/rhysd/actionlint) для workflow plc-ci-toolkit.
+self-hosted-runner:
+  # Метка Windows-раннера с CODESYS (docs/runner_setup.md); self-hosted и windows actionlint знает сам
+  labels:
+    - codesys
+
+# Переменные репозитория, которые читают workflow (vars.*): actionlint проверяет имена строго
+config-variables:
+  - PLC_CODESYS_RUNNER
+
+paths:
+  .github/workflows/**/*.{yml,yaml}:
+    ignore:
+      # Свойства контекста job.workflow_repository/workflow_sha/workflow_ref/workflow_file_path
+      # описаны в справочнике контекстов GitHub (раздел job), но actionlint 1.7.12 их ещё не знает.
+      # Переиспользуемый workflow выгружает по ним собственный коммит (скрипты ci/).
+      - 'property "workflow_(repository|sha|ref|file_path)" is not defined in object type'
+      # concurrency.queue (single | max) описан в синтаксисе workflow GitHub, actionlint 1.7.12 его не знает
+      - 'unexpected key "queue" for "concurrency" section'

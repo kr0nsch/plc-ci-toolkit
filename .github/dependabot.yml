@@ -1,0 +1,18 @@
+# Обновления actions, закреплённых по SHA в .github/workflows (docs/ASSUMPTIONS.md, W1).
+# Dependabot предлагает новый SHA с комментарием версии; pull request принимается после чтения
+# изменений action (docs/runner_security.md, раздел 3.5). Выдержка 7 дней — новая версия не
+# попадает в CI в день выхода.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+    groups:
+      actions:
+        patterns:
+          - "*"

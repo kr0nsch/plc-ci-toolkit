@@ -1,0 +1,21 @@
+# Самопроверка plc-codesys.yml на собственном примере ST (src/, tests/ из шаблона) на self-hosted
+# раннере Windows с CODESYS 3.5.17.30 (метки self-hosted, windows, codesys).
+# Запуск — только push в main, теги v* и вручную; pull_request сюда не входит намеренно
+# (docs/runner_security.md). Пока раннер не подключён, задание пропускается: его включает переменная
+# репозитория PLC_CODESYS_RUNNER=true (Settings → Secrets and variables → Actions → Variables).
+name: CODESYS
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  codesys:
+    name: plc-codesys (пример ST)
+    if: ${{ vars.PLC_CODESYS_RUNNER == 'true' }}
+    uses: ./.github/workflows/plc-codesys.yml

@@ -1,0 +1,21 @@
+{
+  "diagnostics": [],
+  "errors": 0,
+  "excluded": {},
+  "files": [
+    "E_DeviceMode.st",
+    "FB_Example.st",
+    "FB_Example_Test.st",
+    "FB_F_Clamp_Test.st",
+    "F_Clamp.st",
+    "GVL_Const.st",
+    "I_Resettable.st",
+    "PRG_Main.st",
+    "PRG_Tests.st",
+    "ST_ExampleCmd.st",
+    "ST_ExampleSts.st"
+  ],
+  "returncode": 0,
+  "version": 1,
+  "warnings": 0
+}

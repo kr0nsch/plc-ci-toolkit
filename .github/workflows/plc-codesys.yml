@@ -1,0 +1,336 @@
+# Переиспользуемый workflow plc-ci-toolkit: полная сборка и тесты coUnit в CODESYS на self-hosted
+# раннере Windows с CODESYS V3.5 SP17 Patch 3 и CODESYS Control Win V3 (метки self-hosted, windows,
+# codesys). Подключение — docs/USAGE.md, настройка раннера — docs/runner_setup.md, риски —
+# docs/runner_security.md.
+#
+#   jobs:
+#     codesys:
+#       needs: static
+#       if: ...  # PLC_CODESYS_RUNNER и список разрешённых событий — examples/consumer-ci.yml
+#       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+#
+# Политика запуска: только push в main и теги, workflow_dispatch и schedule — никогда pull_request
+# и pull_request_target (PR из форка выполнил бы свой код на машине с CODESYS) и не в форках.
+# Задание guard на GitHub-hosted раннере проверяет это до того, как задание попадёт на self-hosted.
+#
+# Шаги на раннере: проверка Python и раскладки -> Static Analysis Light (cds.py build, ci/sa_check.py,
+# ci/sa_report.py) -> cds.py runtime restart (новое окно демо-режима 2 ч) -> cds.py test (импорт,
+# сборка, загрузка, запуск, ожидание coUnit, результаты) -> cds.py junit -> публикация JUnit
+# (аннотации и сводка, без прав на запись) -> сводка (ci/summary.py) -> cds.py runtime stop ->
+# артефакты (журналы и отчёты).
+# Статанализ — до тестов: его cds.py build перезаписал бы build/build.json тестового проекта, а
+# перезапуск рантайма ближе к тестам оставляет им больше времени демо-режима. Тесты запускаются и
+# тогда, когда статанализ не прошёл.
+#
+# Скрипты шагов на Windows PowerShell 5.1 — только ASCII: раннер пишет файл скрипта в UTF-8 без BOM,
+# а PowerShell 5.1 читает такой файл в кодировке ANSI. Сообщения по-русски выводят скрипты Python.
+# Скрипт запускается через -File, а не -Command ". '{0}'" (как у встроенной оболочки powershell): с
+# -Command код выхода любого неуспешного шага — 1, с -File в журнал шага доходит код cds.py
+# (3 — окружение, 4 — таймаут, 5 — блокировка), проверено на Windows PowerShell 5.1.
+name: PLC CODESYS build and tests
+
+on:
+  workflow_call:
+    inputs:
+      runner-labels:
+        description: Метки self-hosted раннера с CODESYS — JSON-массив
+        type: string
+        default: '["self-hosted", "windows", "codesys"]'
+      python:
+        description: Команда или полный путь Python 3.11+ на раннере (без аргументов)
+        type: string
+        default: python
+      restart-runtime:
+        description: Перезапустить рантайм перед тестами (cds.py runtime restart) — новое окно демо-режима 2 ч
+        type: boolean
+        default: true
+      stop-runtime:
+        description: Остановить рантайм в конце задания (cds.py runtime stop) — порты рантайма не открыты в простое
+        type: boolean
+        default: true
+      allowed-refs:
+        description: Ссылки, для которых разрешён запуск по push (шаблоны через пробел)
+        type: string
+        default: refs/heads/main refs/tags/*
+      junit-report:
+        description: Публикация build/junit.xml — аннотации упавших тестов и таблица в сводке
+        type: boolean
+        default: true
+      sa-check:
+        description: Static Analysis Light — cds.py build, ci/sa_check.py, ci/sa_report.py
+        type: boolean
+        default: true
+      sa-fail-on:
+        description: "Политика ci/sa_report.py: new (находки вне базовой линии ci/sa_baseline.json валят задание), any или never"
+        type: string
+        default: new
+      working-directory:
+        description: Корень ПЛК-репозитория внутри checkout (для монорепозитория)
+        type: string
+        default: "."
+      artifact-name:
+        description: Имя артефакта с журналами и отчётами build/ (уникальное, если workflow вызывается несколько раз)
+        type: string
+        default: plc-codesys-reports
+      timeout-minutes:
+        description: Таймаут задания на раннере, мин — меньше 110 (демо-режим рантайма — 2 ч)
+        type: number
+        default: 90
+      toolkit-repository:
+        description: owner/repo plc-ci-toolkit для скриптов ci/; пусто — репозиторий этого workflow
+        type: string
+        default: ""
+      toolkit-ref:
+        description: Коммит, тег или ветка plc-ci-toolkit; пусто — коммит этого workflow
+        type: string
+        default: ""
+    outputs:
+      result:
+        description: Итог — success или failure (пусто — задание не дошло до сводки)
+        value: ${{ jobs.codesys.outputs.result }}
+      tests:
+        description: Число тестов coUnit
+        value: ${{ jobs.codesys.outputs.tests }}
+      passed:
+        description: Пройдено тестов
+        value: ${{ jobs.codesys.outputs.passed }}
+      failed:
+        description: Упало тестов
+        value: ${{ jobs.codesys.outputs.failed }}
+      skipped:
+        description: Пропущено тестов (DISABLED_)
+        value: ${{ jobs.codesys.outputs.skipped }}
+      build-errors:
+        description: Ошибок компилятора CODESYS
+        value: ${{ jobs.codesys.outputs.build-errors }}
+      build-warnings:
+        description: Предупреждений компилятора CODESYS
+        value: ${{ jobs.codesys.outputs.build-warnings }}
+
+jobs:
+  # Быстрый отказ на GitHub-hosted раннере: недопустимое событие не дойдёт до машины с CODESYS
+  guard:
+    name: Политика запуска (без pull_request и форков)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Событие, ссылка, форк, таймаут
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          IS_FORK: ${{ github.event.repository.fork }}
+          ALLOWED_REFS: ${{ inputs.allowed-refs }}
+          TIMEOUT: ${{ inputs.timeout-minutes }}
+          SA_FAIL_ON: ${{ inputs.sa-fail-on }}
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error title=plc-codesys::$1"
+            exit 1
+          }
+          case "$EVENT_NAME" in
+            push | workflow_dispatch | schedule) ;;
+            *) fail "событие $EVENT_NAME запрещено: задание CODESYS запускается только по push в main и тегам, вручную (workflow_dispatch) и по расписанию — PR из форка выполнил бы чужой код на self-hosted раннере (docs/runner_security.md)" ;;
+          esac
+          if [ "$IS_FORK" = "true" ]; then
+            fail "репозиторий — форк: у форка нет доступа к раннеру с CODESYS, запуск запрещён"
+          fi
+          if [ "$EVENT_NAME" = push ]; then
+            allowed=false
+            read -r -a patterns <<< "$ALLOWED_REFS"
+            for pattern in "${patterns[@]}"; do
+              # shellcheck disable=SC2053 # шаблон без кавычек: сравнение по маске (refs/tags/*)
+              if [[ "$REF" == $pattern ]]; then allowed=true; fi
+            done
+            if [ "$allowed" != true ]; then
+              fail "push в $REF: разрешены только $ALLOWED_REFS (вход allowed-refs)"
+            fi
+          fi
+          case "$TIMEOUT" in
+            '' | *[!0-9]*) fail "timeout-minutes=$TIMEOUT: нужно целое число минут" ;;
+          esac
+          if [ "$TIMEOUT" -ge 110 ]; then
+            fail "timeout-minutes=$TIMEOUT: должно быть меньше 110 — рантайм в демо-режиме работает 2 ч"
+          fi
+          case "$SA_FAIL_ON" in
+            new | any | never) ;;
+            *) fail "sa-fail-on: ожидалось new, any или never, получено $SA_FAIL_ON" ;;
+          esac
+          echo "разрешено: $EVENT_NAME $REF"
+
+  codesys:
+    name: CODESYS — импорт, сборка, тесты coUnit
+    needs: guard
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    # Рантайм CODESYS Control Win один на машину: задания репозитория идут строго по очереди
+    # (queue: max — ожидающие запуски не отменяют друг друга). Задания разных репозиториев на одной
+    # машине разводит глобальная блокировка cds.py (%LOCALAPPDATA%\plc-tools\codesys-runtime.lock).
+    concurrency:
+      group: plc-codesys-${{ github.repository }}
+      cancel-in-progress: false
+      queue: max
+    defaults:
+      run:
+        # Windows PowerShell 5.1 есть на любой Windows; -ExecutionPolicy Bypass — только для этого
+        # процесса (политика машины не меняется); путь скрипта в кавычках — каталог раннера может
+        # содержать пробелы. Раннер и для такой строки добавляет $ErrorActionPreference = 'stop' и
+        # выход по $LASTEXITCODE (по имени оболочки powershell)
+        shell: powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}"
+        working-directory: ${{ inputs.working-directory }}
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      PLC_PY: ${{ inputs.python }}
+      PLC_CI_TOOLKIT: ${{ github.workspace }}/.plc-ci-toolkit
+      WORKDIR: ${{ inputs.working-directory }}
+    outputs:
+      result: ${{ steps.summary.outputs.result }}
+      tests: ${{ steps.summary.outputs.tests }}
+      passed: ${{ steps.summary.outputs.passed }}
+      failed: ${{ steps.summary.outputs.failed }}
+      skipped: ${{ steps.summary.outputs.skipped }}
+      build-errors: ${{ steps.summary.outputs.build-errors }}
+      build-warnings: ${{ steps.summary.outputs.build-warnings }}
+    steps:
+      # clean: true (по умолчанию) очищает рабочий каталог раннера от прошлого прогона, включая build/
+      - name: Выгрузка репозитория
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Скрипты ci/ — из того же коммита plc-ci-toolkit, что и этот workflow
+      - name: Выгрузка plc-ci-toolkit (скрипты ci/)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.toolkit-repository || job.workflow_repository }}
+          ref: ${{ inputs.toolkit-ref || job.workflow_sha }}
+          path: .plc-ci-toolkit
+          persist-credentials: false
+
+      # Python, tools/codesys шаблона, служебный каталог вне git status (ci/runner_check.py)
+      - name: Проверка раннера
+        id: python_check
+        run: |
+          if (-not (Get-Command $env:PLC_PY -ErrorAction SilentlyContinue)) {
+            Write-Output "::error title=plc-codesys::Python not found: '$env:PLC_PY'. Install Python 3.11+ for the runner account or set the 'python' input (docs/runner_setup.md)."
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath "$env:PLC_CI_TOOLKIT/ci/runner_check.py")) {
+            Write-Output "::error title=plc-codesys::No ci/runner_check.py in the plc-ci-toolkit checkout (.plc-ci-toolkit): set the toolkit-repository and toolkit-ref inputs (docs/USAGE.md, section 6)."
+            exit 1
+          }
+          & $env:PLC_PY "$env:PLC_CI_TOOLKIT/ci/runner_check.py" --root . --workspace $env:GITHUB_WORKSPACE
+
+      # Static Analysis Light выполняется только при генерации кода (docs/sa_light.md): рабочий проект
+      # собирается из src/ (cds.py build), ci/sa_check.py включает правила на время сеанса и
+      # генерирует код, ci/sa_report.py сверяет находки с базовой линией ci/sa_baseline.json
+      # репозитория и пишет build/sa_report.md (он попадает в сводку) и build/sa_report.json
+      - name: Static Analysis Light (SA)
+        id: sa_report
+        if: ${{ inputs.sa-check && steps.python_check.outcome == 'success' }}
+        continue-on-error: ${{ inputs.sa-fail-on == 'never' }}
+        env:
+          SA_FAIL_ON: ${{ inputs.sa-fail-on }}
+        run: |
+          & $env:PLC_PY tools/codesys/cds.py build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:PLC_PY "$env:PLC_CI_TOOLKIT/ci/sa_check.py" --root .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $opts = @('--root', '.', '--fail-on', $env:SA_FAIL_ON, '--annotations')
+          if ($env:WORKDIR -and $env:WORKDIR -ne '.') { $opts += @('--path-prefix', $env:WORKDIR) }
+          & $env:PLC_PY "$env:PLC_CI_TOOLKIT/ci/sa_report.py" @opts
+
+      - name: Рантайм — перезапуск (новое окно демо-режима 2 ч)
+        id: runtime
+        if: ${{ !cancelled() && inputs.restart-runtime && steps.python_check.outcome == 'success' }}
+        run: |
+          & $env:PLC_PY tools/codesys/cds.py runtime restart
+
+      # import --tests в чистый тестовый проект, сборка, загрузка в рантайм, старт, ожидание
+      # AllTestSuitesFinished, чтение результатов coUnit -> build/test-results.json, build/junit.xml.
+      # Если перезапуск рантайма не удался (порт занят службой), cds.py test работает с тем, что есть.
+      - name: cds.py test — импорт, сборка, загрузка, прогон coUnit
+        id: test
+        if: ${{ !cancelled() && steps.python_check.outcome == 'success' }}
+        run: |
+          & $env:PLC_PY tools/codesys/cds.py test --clean
+
+      - name: cds.py junit — JUnit XML
+        id: junit
+        if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          & $env:PLC_PY tools/codesys/cds.py junit
+
+      # annotate_only: без check run — достаточно contents: read, работает и с токеном только на чтение
+      - name: Публикация JUnit (аннотации и сводка)
+        id: publish
+        if: ${{ !cancelled() && inputs.junit-report && steps.junit.outcome == 'success' }}
+        continue-on-error: true
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        with:
+          report_paths: ${{ inputs.working-directory }}/build/junit.xml
+          annotate_only: true
+          check_name: CODESYS coUnit
+          job_summary: true
+          detailed_summary: true
+          include_passed: true
+          fail_on_failure: false
+          require_tests: true
+
+      # Итоги шагов передаются явным JSON: выходы шага публикации (HTML-таблицы) не нужны сводке, а
+      # переменная окружения Windows ограничена 32 767 символами
+      - name: Сводка
+        id: summary
+        if: ${{ !cancelled() && steps.python_check.outcome == 'success' }}
+        env:
+          PLC_CI_STEPS: >-
+            {"python_check": {"outcome": "${{ steps.python_check.outcome }}",
+            "outputs": {"version": "${{ steps.python_check.outputs.version }}"}},
+            "runtime": {"outcome": "${{ steps.runtime.outcome }}"},
+            "test": {"outcome": "${{ steps.test.outcome }}"},
+            "junit": {"outcome": "${{ steps.junit.outcome }}"},
+            "publish": {"outcome": "${{ steps.publish.outcome }}"},
+            "sa_report": {"outcome": "${{ steps.sa_report.outcome }}"}}
+          ARTIFACT: ${{ inputs.artifact-name }}
+          RESTART: ${{ inputs.restart-runtime }}
+          JUNIT_REPORT: ${{ inputs.junit-report }}
+          SA_CHECK: ${{ inputs.sa-check }}
+          SA_BLOCKING: ${{ inputs.sa-fail-on != 'never' }}
+        run: |
+          $opts = @('codesys', '--root', '.', '--annotations', '--artifact', $env:ARTIFACT,
+                    '--restart-runtime', $env:RESTART, '--junit-report', $env:JUNIT_REPORT,
+                    '--sa-report', $env:SA_CHECK, '--sa-blocking', $env:SA_BLOCKING)
+          if ($env:WORKDIR -and $env:WORKDIR -ne '.') { $opts += @('--path-prefix', $env:WORKDIR) }
+          if (Test-Path -LiteralPath 'build/sa_report.md') { $opts += @('--extra-md', 'build/sa_report.md') }
+          & $env:PLC_PY "$env:PLC_CI_TOOLKIT/ci/summary.py" @opts
+
+      # Следующее задание всё равно начинает с перезапуска, а в простое порты рантайма закрыты.
+      # always(): и после отмены задания. cds.py останавливает только свой процесс (не службу Windows)
+      # и ждёт глобальную блокировку, если рантаймом пользуется задание другого репозитория.
+      - name: Рантайм — остановка
+        if: ${{ always() && inputs.stop-runtime && steps.python_check.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          & $env:PLC_PY tools/codesys/cds.py runtime stop
+
+      # Проекты CODESYS (.project), кэш и файлы компиляции в артефакт не попадают: они большие и
+      # собираются из src/ заново
+      - name: Артефакты (журналы и отчёты build/)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: |
+            ${{ inputs.working-directory }}/build/*.log
+            ${{ inputs.working-directory }}/build/*.json
+            ${{ inputs.working-directory }}/build/*.xml
+            ${{ inputs.working-directory }}/build/*.md
+            ${{ inputs.working-directory }}/build/codesys/*.log
+            ${{ inputs.working-directory }}/build/codesys/*.json
+          if-no-files-found: warn
+          retention-days: 14

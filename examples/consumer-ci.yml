@@ -1,0 +1,53 @@
+# Пример CI репозитория-потребителя (ПЛК-репозиторий на шаблоне plc-repo-template).
+# Скопируйте файл в .github/workflows/plc-ci.yml своего репозитория; пошагово — docs/USAGE.md
+# в plc-ci-toolkit, риски self-hosted раннера — docs/runner_security.md.
+#
+# Задание static — на GitHub-hosted Linux для каждого push в main и каждого pull request:
+# ruff, pytest, сборка ST, st_lint, iec_checker, RuSTy.
+# Задание codesys — на self-hosted Windows с CODESYS: только push в main, теги v* и ручной запуск.
+# Никогда не на pull_request и pull_request_target: PR из форка выполнил бы свой код на машине с
+# CODESYS. Ту же проверку повторяет задание guard внутри plc-codesys.yml.
+name: PLC CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Токену заданий достаточно чтения: результаты публикуются аннотациями и сводкой, без check run
+permissions:
+  contents: read
+
+# Pull request: новый push в PR отменяет прошлый запуск. Push в main, теги и ручной запуск — у
+# каждого запуска своя группа (run_id): общая группа по ссылке отменяла бы ожидающий запуск main при
+# следующем push, и коммит остался бы без прогона в CODESYS. Задания CODESYS выстраивает в очередь
+# сам plc-codesys.yml (concurrency с queue: max).
+concurrency:
+  group: plc-ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: Проверки без CODESYS
+    uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
+    with:
+      iec-checker: binary # binary (v0.4) | docker (nightly) | off
+      rusty: true
+
+  codesys:
+    name: CODESYS — сборка и тесты coUnit
+    needs: static
+    # Переменная репозитория PLC_CODESYS_RUNNER=true — после того как раннер с меткой codesys
+    # подключён (Settings → Secrets and variables → Actions → Variables); без неё задание пропускается
+    if: >-
+      vars.PLC_CODESYS_RUNNER == 'true' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+      )
+    uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+    with:
+      restart-runtime: true # новое окно демо-режима 2 ч перед каждым прогоном
+      sa-fail-on: new # находки Static Analysis Light вне ci/sa_baseline.json валят задание

@@ -1,0 +1,89 @@
+{
+  "errors": 0,
+  "messages": [
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Text",
+      "source": null,
+      "text": "------ Компиляция : Приложение: Device.Application -------"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Text",
+      "source": null,
+      "text": "Приложение актуально"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Information",
+      "source": null,
+      "text": "Размер генерируемого кода: 262698 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Information",
+      "source": null,
+      "text": "Размер глобальных данных: 86155280 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Information",
+      "source": null,
+      "text": "Общий размер выделенной памяти для кода и данных: 86393728 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Text",
+      "source": null,
+      "text": "Компиляция завершена -- 0 ошибок, 0 предупреждений"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода..."
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода завершены -- 0 ошибки (-ок)"
+    }
+  ],
+  "ok": true,
+  "project": "C:\\actions-runner\\_work\\plc-repo-template\\plc-repo-template\\build\\plc-repo-template-tests.project",
+  "summary_line": "Компиляция завершена -- 0 ошибок, 0 предупреждений",
+  "warnings": 0
+}
