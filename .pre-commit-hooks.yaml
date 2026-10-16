@@ -1,0 +1,21 @@
+# Хуки pre-commit, которые plc-ci-toolkit публикует для репозиториев на шаблоне plc-repo-template.
+# Подключение — examples/consumer/.pre-commit-config.yaml, описание — docs/pre_commit.md.
+# Хук ставится pre-commit как пакет Python (pyproject.toml, [project.scripts]); нужен Python 3.11+.
+
+- id: codesys-sources-exported
+  name: "CODESYS: правки из IDE выгружены в src/ (cds.py export)"
+  description: >-
+    Останавливает коммит, если проект CODESYS в build/ сохранён в IDE после последнего
+    cds.py import/export (правки не выгружены в src/ и tests/), и если в коммит попали файлы
+    .project, .projectarchive, .library или .compiled-library. Опирается на отпечатки,
+    которые cds.py пишет в build/codesys/state.json; CODESYS не запускает.
+  entry: check-codesys-exported
+  language: python
+  # Файлы CODESYS в коммите — ошибка; сама проверка проектов идёт при каждом коммите
+  # (проекты в .gitignore и в список файлов коммита не попадают).
+  files: '(?i)\.(project|projectarchive|library|compiled-library)$'
+  always_run: true
+  pass_filenames: true
+  require_serial: true
+  # Предупреждения (проект открыт в IDE) видны и при успешной проверке; без замечаний хук молчит.
+  verbose: true

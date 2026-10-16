@@ -1,0 +1,38 @@
+# Пример .pre-commit-config.yaml для репозитория на шаблоне plc-repo-template.
+#
+# Скопируйте файл в корень своего репозитория и установите хуки (один раз в каждом клоне):
+#   python -m pip install --user pre-commit
+#   python -m pre_commit install
+# Проверить все файлы вручную: python -m pre_commit run --all-files
+# Описание хуков, сообщений и ограничений:
+#   https://github.com/<GITHUB_USER>/plc-ci-toolkit/blob/main/docs/pre_commit.md
+#
+# Версии — те же, что в CI: ruff — как в requirements-dev.txt шаблона (ruff==0.17.1), st_lint и
+# cds.py — из tools/ вашего репозитория, проверка «исходники выгружены» — из релиза plc-ci-toolkit.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Линтер ST шаблона. Запускается, если в коммите есть файлы .st (или изменились его
+      # настройки), и проверяет раскладку src/ и tests/ целиком: правила раскладки (LAY004,
+      # LAY006 и др.) касаются нескольких файлов сразу. --strict — как в CI.
+      - id: st-lint
+        name: "st_lint: ST по правилам CONTRIBUTING.md"
+        entry: python tools/check/st_lint.py --strict
+        language: python
+        files: '(\.st|^tools/check/st_lint\.toml)$'
+        pass_filenames: false
+
+  # Правки проекта CODESYS из IDE выгружены в src/ и tests/ (cds.py export), файлов .project
+  # и .library в коммите нет. CODESYS для проверки не нужен.
+  # rev — точный тег выпуска v1.x.y (до первого выпуска — SHA коммита main), не плавающий v1:
+  # pre-commit хранит копию хука по значению rev. Обновление — python -m pre_commit autoupdate.
+  - repo: https://github.com/<GITHUB_USER>/plc-ci-toolkit
+    rev: v1.0.0
+    hooks:
+      - id: codesys-sources-exported

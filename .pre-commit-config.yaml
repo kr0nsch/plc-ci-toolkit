@@ -1,0 +1,29 @@
+# pre-commit для разработки plc-ci-toolkit: те же хуки, что у потребителей
+# (examples/consumer/.pre-commit-config.yaml), но проверка «исходники выгружены» запускается из
+# рабочей копии (ci/check_exported.py), а не из релиза. Установка и описание — docs/pre_commit.md.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: st-lint
+        name: "st_lint: ST по правилам CONTRIBUTING.md"
+        entry: python tools/check/st_lint.py --strict
+        language: python
+        files: '(\.st|^tools/check/st_lint\.toml)$'
+        pass_filenames: false
+
+      # Те же параметры, что у хука в .pre-commit-hooks.yaml
+      - id: codesys-sources-exported
+        name: "CODESYS: правки из IDE выгружены в src/ (cds.py export)"
+        entry: python ci/check_exported.py
+        language: python
+        files: '(?i)\.(project|projectarchive|library|compiled-library)$'
+        always_run: true
+        pass_filenames: true
+        require_serial: true
+        verbose: true
