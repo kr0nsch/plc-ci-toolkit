@@ -1,0 +1,16 @@
+{
+  "_doc": [
+    "Правила CODESYS Static Analysis Light для ci/sa_check.py (CODESYS 3.5.17.30).",
+    "Режим: error — сообщение-ошибка (как при включении правила в IDE), warning — предупреждение, off — правило выключено.",
+    "Правила Light, которых здесь нет, выключаются. Других правил SA в Light нет: полный список — в docs/sa_light.md.",
+    "Режим влияет только на важность сообщения CODESYS; пройдена ли проверка, решает ci/sa_report.py (базовая линия ci/sa_baseline.json)."
+  ],
+  "rules": {
+    "SA0004": "warning",
+    "SA0006": "warning",
+    "SA0027": "warning",
+    "SA0028": "warning",
+    "SA0033": "warning",
+    "SA0167": "warning"
+  }
+}

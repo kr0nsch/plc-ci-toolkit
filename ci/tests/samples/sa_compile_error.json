@@ -1,0 +1,336 @@
+{
+  "code_generation": true,
+  "errors": 1,
+  "messages": [
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "------ Компиляция : Приложение: Device.Application -------"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "типизировать код..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "генерировать код..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": "C0373",
+      "object": "PRG_Main",
+      "position": "Строка 33, Столбец 1 (Реализ.)",
+      "prefix": "C",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_Main/PRG_Main.impl.st:33",
+      "text": "Адрес %QX0.0 не задан ни в одном устройстве. Возможно, адрес не используется."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": "C0373",
+      "object": "PRG_SaTask2",
+      "position": "Строка 2, Столбец 1 (Реализ.)",
+      "prefix": "C",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_SaTask2/PRG_SaTask2.impl.st:2",
+      "text": "Адрес %QX0.0 не задан ни в одном устройстве. Возможно, адрес не используется."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": "C0032",
+      "object": "FB_SaBad",
+      "position": "Строка 5, Столбец 1 (Реализ.)",
+      "prefix": "C",
+      "severity": "Error",
+      "source": "src/POUs/FB_SaBad/FB_SaBad.impl.st:5",
+      "text": "Невозможно конвертировать тип 'DINT' в тип 'INT'"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Error",
+      "source": null,
+      "text": "Есть сообщения доп. проверок кода. См. категорию 'Доп. проверки кода'"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "Компиляция завершена -- 2 ошибок, 2 предупреждений : загрузка невозможна"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода..."
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Множественная запись на выходе:"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0004",
+      "object": "PRG_Main",
+      "position": "Строка 33, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_Main/PRG_Main.impl.st:33",
+      "text": "Множественная запись на выходе '%QX0.0'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0004",
+      "object": "PRG_SaTask2",
+      "position": "Строка 2, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_SaTask2/PRG_SaTask2.impl.st:2",
+      "text": "Множественная запись на выходе '%QX0.0'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0006",
+      "object": "PRG_Main",
+      "position": "Строка 32, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_Main/PRG_Main.impl.st:32",
+      "text": "Параллельный доступ по записи к 'diShared' в Задачах MainTask, SlowTask"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0006",
+      "object": "PRG_SaTask2",
+      "position": "Строка 1, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_SaTask2/PRG_SaTask2.impl.st:1",
+      "text": "Параллельный доступ по записи к 'diShared' в Задачах MainTask, SlowTask"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0006",
+      "object": "PRG_Main",
+      "position": "Строка 33, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_Main/PRG_Main.impl.st:33",
+      "text": "Параллельный доступ по записи к 'xOutBad' в Задачах MainTask, SlowTask"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0006",
+      "object": "PRG_SaTask2",
+      "position": "Строка 2, Столбец 1 (Реализ.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/PRG_SaTask2/PRG_SaTask2.impl.st:2",
+      "text": "Параллельный доступ по записи к 'xOutBad' в Задачах MainTask, SlowTask"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0033",
+      "object": "GVL_SaProbe",
+      "position": "Строка 8",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/GVLs/GVL_SaProbe.gvl.st:8",
+      "text": "Неиспользуемый Переменная 'iGlobalUnused'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0033",
+      "object": "FB_SaBad",
+      "position": "Строка 14 (Объявл.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/FB_SaBad/FB_SaBad.decl.st:14",
+      "text": "Неиспользуемый Переменная 'iUnused2'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0167",
+      "object": "FB_SaBad.Check",
+      "position": "Строка 3 (Объявл.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/FB_SaBad/Check.method.decl.st:3",
+      "text": "Временный экземпляр ФБ: 'fbPulse'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0033",
+      "object": "FB_SaBad.Check",
+      "position": "Строка 4 (Объявл.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/FB_SaBad/Check.method.decl.st:4",
+      "text": "Неиспользуемый Переменная 'iNeverUsed'"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0027",
+      "object": "FB_SaBad",
+      "position": "Строка 16 (Объявл.)",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/POUs/FB_SaBad/FB_SaBad.decl.st:16",
+      "text": "Имя переменной 'F_Clamp' в 'FB_SaBad' уже используется для объекта в это приложение"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Следующие переменные обращаются к одной и той же памяти:"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0028",
+      "object": "GVL_SaProbe",
+      "position": "Строка 5",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/GVLs/GVL_SaProbe.gvl.st:5",
+      "text": "wOverlapA AT %MW10"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": "SA0028",
+      "object": "GVL_SaProbe",
+      "position": "Строка 6",
+      "prefix": "SA",
+      "severity": "Warning",
+      "source": "src/GVLs/GVL_SaProbe.gvl.st:6",
+      "text": "bOverlapB AT %MB21"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода завершены -- 13 ошибки (-ок)"
+    }
+  ],
+  "notes": [],
+  "ok": false,
+  "plugin_version": "3.5.17.20",
+  "project": "C:\\ci\\plc-demo\\build\\plc-demo.project",
+  "rules": [
+    {
+      "mode": "warning",
+      "name": "Множественный доступ по записи на выходе",
+      "rule": "SA0004"
+    },
+    {
+      "mode": "warning",
+      "name": "Параллельный доступ",
+      "rule": "SA0006"
+    },
+    {
+      "mode": "warning",
+      "name": "Многократное использование имени",
+      "rule": "SA0027"
+    },
+    {
+      "mode": "warning",
+      "name": "Перекрывающиеся области памяти",
+      "rule": "SA0028"
+    },
+    {
+      "mode": "warning",
+      "name": "Неиспользуемые переменные",
+      "rule": "SA0033"
+    },
+    {
+      "mode": "warning",
+      "name": "Сообщать о временных экземплярах ФБ",
+      "rule": "SA0167"
+    }
+  ],
+  "rules_file": "C:\\ci\\plc-demo\\ci\\sa_rules.json",
+  "sa": {
+    "by_code": {
+      "SA0004": 2,
+      "SA0006": 4,
+      "SA0027": 1,
+      "SA0028": 2,
+      "SA0033": 3,
+      "SA0167": 1
+    },
+    "download_blocked": true,
+    "findings": 13,
+    "reported": 13,
+    "started": true
+  },
+  "summary_line": "Компиляция завершена -- 2 ошибок, 2 предупреждений : загрузка невозможна",
+  "tests_project": false,
+  "tool": "CODESYS Static Analysis Light",
+  "warnings": 2
+}

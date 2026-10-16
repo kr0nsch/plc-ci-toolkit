@@ -12,6 +12,7 @@
 | `tools/check/run_iec_checker.py --tests` | локально и в CI (обязательно): бинарник iec_checker v0.4 из релизов github.com/jubnzv/iec-checker | `build/assembled/iec-checker/` (вариант сборки `iec-checker`) | `build/iec_checker.json`, `build/iec_checker.md` |
 | то же с `--docker` | CI, необязательное задание: образ `jubnzv1/iec-checker:nightly`, закреплённый по дайджесту в `ci.yml` | то же | то же, артефакт `iec-checker-nightly-reports` |
 | `tools/check/run_rusty.py` | локально и в CI (необязательное задание): RuSTy `plc --check` | `build/assembled/rusty/` (вариант сборки `rusty`, `src/` и `tests/`) | `build/rusty.log`, `build/rusty.json` |
+| `ci/sa_check.py`, затем `ci/sa_report.py` | Windows с CODESYS: локально и в CI (`plc-codesys.yml`, шаг Static Analysis Light) — правила CODESYS Static Analysis Light на время сеанса, генерация кода ([sa_light.md](sa_light.md)) | рабочий проект из `src/` (после `cds.py build`) | `build/sa.json`, `build/sa.log`, `build/sa_report.md`, `build/sa_report.json`; принятые находки — `ci/sa_baseline.json` |
 
 Обоснования в `tools/check/iec_checker_allow.toml` подобраны под находки v0.4 — той же версии, что в
 обязательном шаге CI. Образ `nightly` разбирает больше конструкций и может находить иначе: если
@@ -27,6 +28,8 @@
 | 2026-10-16 | `run_iec_checker.py` (iec_checker 0.4, Windows, локально) | 8 объектов `src/` | ошибок разбора нет; необоснованных 0; обоснованных 32: CP3 — 24, L17 — 4, CP9 — 2, UnusedVariable — 2; артефактов сборки 10 (CP3) |
 | 2026-10-16 | `run_iec_checker.py --tests` (iec_checker 0.4, Windows, локально) | 11 объектов `src/` и `tests/` | ошибок разбора нет; необоснованных 0; обоснованных 100: CP3 — 49, UnusedVariable — 30, CP9 — 17, L17 — 4; артефактов сборки 10 (CP3) |
 | 2026-10-16 | `run_rusty.py` (RuSTy 1.0.6, `plc --check`, Windows, локально) | 11 файлов `build/assembled/rusty/` (`src/` и `tests/` с прокладками coUnit и Standard) | 0 ошибок, 0 предупреждений; исключений в `rusty_exclude.txt` нет |
+| 2026-10-16 | `ci/sa_check.py` + `ci/sa_report.py` (CODESYS 3.5.17.30, Static Analysis Light, 6 правил, локально) | рабочий проект `src/` | находок 0; базовая линия пуста |
+| 2026-10-16 | то же с `--tests` (вне CI, для сведения) | тестовый проект `src/` и `tests/` | 11 × SA0167 «Временный экземпляр ФБ: 'fbDut'» — экземпляр в `VAR` методов `FB_Example_Test`, так задумано ([ASSUMPTIONS.md, C9](ASSUMPTIONS.md)); тестовый проект CI не анализирует |
 | — | iec_checker 0.4 (CI, Linux) | 11 объектов `src/` и `tests/` | _перенести из отчёта CI_ |
 | — | iec_checker `nightly` (CI, необязательно) | то же | _перенести из отчёта CI_ |
 

@@ -1,0 +1,208 @@
+{
+  "code_generation": true,
+  "errors": 0,
+  "messages": [
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "------ Компиляция : Приложение: Device.Application -------"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "типизировать код..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "генерировать код..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "генерировать глобальные инициализации ..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "генерировать код инициализации..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "генерация перемещений..."
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Information",
+      "source": null,
+      "text": "Размер генерируемого кода: 70730 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Information",
+      "source": null,
+      "text": "Размер глобальных данных: 16544 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Information",
+      "source": null,
+      "text": "Общий размер выделенной памяти для кода и данных: 94192 байт"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Information",
+      "source": null,
+      "text": "Область памяти 0 содержит  Данные, Вход, Выход, Память и Небезопасные данные: размер: 1048576 байт, высший используемый адрес: 23456, самый большой промежуток памяти: 1025120  байт (97 %)"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Information",
+      "source": null,
+      "text": "Область памяти 3 содержит  Код: размер: 1048576 байт, высший используемый адрес: 70736, самый большой промежуток памяти: 977840  байт (93 %)"
+    },
+    {
+      "category": "Компиляция",
+      "category_guid": "97f48d64-a2a3-4856-b640-75c046e37ea9",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "C",
+      "severity": "Text",
+      "source": null,
+      "text": "Компиляция завершена -- 0 ошибок, 0 предупреждений: готово к загрузке"
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода..."
+    },
+    {
+      "category": "Доп. проверки кода",
+      "category_guid": "220493a1-f49b-4416-9a3f-a545db707cbe",
+      "code": null,
+      "object": null,
+      "position": null,
+      "prefix": "SA",
+      "severity": "Text",
+      "source": null,
+      "text": "Доп. проверки кода завершены -- 0 ошибки (-ок)"
+    }
+  ],
+  "notes": [],
+  "ok": true,
+  "plugin_version": "3.5.17.20",
+  "project": "C:\\ci\\plc-demo\\build\\plc-demo.project",
+  "rules": [
+    {
+      "mode": "warning",
+      "name": "Множественный доступ по записи на выходе",
+      "rule": "SA0004"
+    },
+    {
+      "mode": "warning",
+      "name": "Параллельный доступ",
+      "rule": "SA0006"
+    },
+    {
+      "mode": "warning",
+      "name": "Многократное использование имени",
+      "rule": "SA0027"
+    },
+    {
+      "mode": "warning",
+      "name": "Перекрывающиеся области памяти",
+      "rule": "SA0028"
+    },
+    {
+      "mode": "warning",
+      "name": "Неиспользуемые переменные",
+      "rule": "SA0033"
+    },
+    {
+      "mode": "warning",
+      "name": "Сообщать о временных экземплярах ФБ",
+      "rule": "SA0167"
+    }
+  ],
+  "rules_file": "C:\\ci\\plc-demo\\ci\\sa_rules.json",
+  "sa": {
+    "by_code": {},
+    "download_blocked": false,
+    "findings": 0,
+    "reported": 0,
+    "started": true
+  },
+  "summary_line": "Компиляция завершена -- 0 ошибок, 0 предупреждений: готово к загрузке",
+  "tests_project": false,
+  "tool": "CODESYS Static Analysis Light",
+  "warnings": 0
+}
