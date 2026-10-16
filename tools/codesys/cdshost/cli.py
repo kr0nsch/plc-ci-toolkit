@@ -14,6 +14,9 @@ build.py, run_tests.py — IronPython 2.7) запускаются как
     build [--tests] [--no-import]          импорт и полная сборка, сообщения -> build/build.log, build.json
     test [--restart-runtime]               импорт с тестами, сборка, прогон coUnit в рантайме -> build/test-results.json
     roundtrip                              импорт в чистый проект -> экспорт во временный каталог -> сравнение
+    library [--install] [--compiled]       src/ -> библиотека build/<имя>.library (+ .compiled-library), установка
+    library --uninstall [--all-versions]   удаление библиотеки этого репозитория из репозитория библиотек
+    deps [KEY...] [--rebuild] [--check]    библиотеки из config.json: проверка, установка, сборка в соседних репо
     runtime start|stop|status|restart|init пользовательский процесс CODESYS Control Win V3
     junit [--results F] [--out F]          build/test-results.json -> build/junit.xml
     report [--results F] [--doc F]         раздел последнего прогона в docs/TEST_REPORT.md
@@ -49,6 +52,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import IO, Any
 
+import cds_common as C
 import stlayout as L
 
 TOOLS_CODESYS = Path(__file__).resolve().parent.parent
@@ -57,6 +61,39 @@ CONFIG_NAME = "config.json"
 JOB_ENV = "CDS_JOB"
 STATE_FILE = "build/codesys/state.json"
 WORK_DIR = "build/codesys"
+
+# Переменные, привязанные к рабочей копии (checkout): читаются только из окружения процесса,
+# не из HKCU\Environment. Заданные через setx, они действовали бы сразу на все рабочие копии —
+# параллельные git worktree одного репозитория писали бы в один проект или собирали бы библиотеку
+# одной версии. Их же не наследует cds.py соседнего репозитория (build_from_repo).
+CHECKOUT_ENV = frozenset(
+    {
+        "CDS_REPO_ROOT",
+        "CDS_CONFIG",
+        "CDS_PROJECT_NAME",
+        "CDS_PROJECT",
+        "CDS_TEST_PROJECT",
+        "CDS_LIBRARY",
+        "CDS_COMPILED_LIBRARY",
+        "CDS_LIBRARY_VERSION",
+        JOB_ENV,
+    }
+)
+LIBRARY_INFO_KEYS = (
+    "title",
+    "company",
+    "version",
+    "default_namespace",
+    "placeholder",
+    "author",
+    "description",
+    "released",
+)
+LIBRARY_PATH_KEYS = (("install_from", "install_env"), ("build_from_repo", "build_env"))
+# Цепочка репозиториев, которые сейчас собирают зависимости (через os.pathsep): её передаёт
+# cds.py соседнему репозиторию (build_from_repo), чтобы цикл библиотек A -> B -> A дал ошибку,
+# а не бесконечную цепочку процессов
+DEPS_CHAIN_ENV = "CDS_DEPS_CHAIN"
 
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -104,7 +141,10 @@ def _registry_env(name: str) -> str | None:
 
 
 def make_getenv(environ: Mapping[str, str] | None = None, registry: bool = True) -> Getenv:
-    """Функция чтения переменной: окружение процесса, затем (Windows) реестр пользователя."""
+    """Функция чтения переменной: окружение процесса, затем (Windows) реестр пользователя.
+
+    Переменные рабочей копии (CHECKOUT_ENV) из реестра не читаются.
+    """
     env = os.environ if environ is None else environ
 
     def getenv(name: str) -> str | None:
@@ -116,9 +156,26 @@ def make_getenv(environ: Mapping[str, str] | None = None, registry: bool = True)
             for key, val in env.items():
                 if key.upper() == name.upper() and val:
                     return val
-        return _registry_env(name) if registry else None
+        if not registry or name.upper() in CHECKOUT_ENV:
+            return None
+        return _registry_env(name)
 
     return getenv
+
+
+def child_environ(environ: Mapping[str, str]) -> dict[str, str]:
+    """Окружение для cds.py другого репозитория: без переменных рабочей копии (CHECKOUT_ENV)."""
+    return {k: v for k, v in environ.items() if k.upper() not in CHECKOUT_ENV}
+
+
+def _chain_key(path: Path) -> str:
+    return os.path.normcase(os.path.normpath(str(path.resolve())))
+
+
+def dependency_chain(environ: Mapping[str, str]) -> list[str]:
+    """Репозитории, которые уже собирают зависимости выше по цепочке (DEPS_CHAIN_ENV)."""
+    raw = next((v for k, v in environ.items() if k.upper() == DEPS_CHAIN_ENV), "")
+    return [os.path.normcase(os.path.normpath(p)) for p in raw.split(os.pathsep) if p]
 
 
 _VAR_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_()]*)\}")
@@ -258,33 +315,119 @@ class Settings:
         return f"{self.value('device.title')} ({dev['type']} / {dev['id']} / {dev['version']})"
 
     def library_spec(self, key: str) -> dict[str, Any]:
+        """Описание библиотеки-зависимости libraries.<key> с разрешёнными путями и проверкой.
+
+        Ключи: namespace (пространство имён ссылки в проекте), title / title_contains / company
+        (какая библиотека), version (точная '1.0.0.0' или '*' — новейшая установленная),
+        placeholder (ссылка-плейсхолдер), qualified_only, install_from (файл .library),
+        build_from_repo (репозиторий, где её собирает cds.py library --install), label.
+        """
         libs = self.node("libraries")
-        if key not in libs:
+        if key not in libs or key.startswith("_"):
             raise CdsError(f"config.json: библиотека {key} не описана в libraries / unknown library {key}", EXIT_USAGE)
-        spec: dict[str, Any] = {k: self.value(f"libraries.{key}.{k}") for k in libs[key] if k != "install_from"}
-        node = libs[key].get("install_from")
-        spec["install_env"] = node.get("env") if isinstance(node, Mapping) else None
-        spec["install_from"] = None
-        if node is not None and self._raw(f"libraries.{key}.install_from")[0]:
-            spec["install_from"] = str(self.path(f"libraries.{key}.install_from"))
+        node = libs[key]
+        if not isinstance(node, Mapping):
+            raise CdsError(f"config.json: libraries.{key} — ожидался объект / expected an object", EXIT_USAGE)
+        path_keys = {path_key for path_key, _ in LIBRARY_PATH_KEYS}
+        spec: dict[str, Any] = {
+            k: self.value(f"libraries.{key}.{k}") for k in node if k not in path_keys and not k.startswith("_")
+        }
+        for path_key, env_key in LIBRARY_PATH_KEYS:
+            sub = node.get(path_key)
+            spec[env_key] = sub.get("env") if isinstance(sub, Mapping) else None
+            spec[path_key] = None
+            if sub is not None and self._raw(f"libraries.{key}.{path_key}")[0]:
+                spec[path_key] = os.path.normpath(str(self.path(f"libraries.{key}.{path_key}")))
         spec["key"] = key
+        version = spec.get("version")
+        if version is not None and not C.is_newest_pin(version) and C.parse_version(version) is None:
+            raise CdsError(
+                f"config.json: libraries.{key}.version = {version!r}: нужна версия из 2-4 чисел (1.0.0.0) или '*' "
+                "(новейшая) / invalid version pin",
+                EXIT_USAGE,
+            )
+        if spec.get("qualified_only") is not None and not isinstance(spec["qualified_only"], bool):
+            raise CdsError(f"config.json: libraries.{key}.qualified_only — true или false", EXIT_USAGE)
+        if not any(spec.get(k) for k in ("title", "title_contains", "company", "namespace")):
+            raise CdsError(
+                f"config.json: libraries.{key}: нужен title, title_contains или namespace / library identity missing",
+                EXIT_USAGE,
+            )
         return spec
 
-    def mode_config(self, mode: str) -> dict[str, Any]:
+    def own_library_keys(self) -> list[str]:
+        """Ключи libraries, на которые ссылается библиотека этого репозитория (library.libraries)."""
+        lib_node = self.config.get("library")
+        own = lib_node.get("libraries", []) if isinstance(lib_node, Mapping) else []
+        return [str(k) for k in own]
+
+    def mode_library_keys(self, mode: str) -> list[str]:
+        """Библиотеки проекта режима: modes.<режим>.libraries и library.libraries, без повторов.
+
+        library.libraries нужны и проектам приложения и тестов этого репозитория: в них
+        компилируются те же объекты src/, что и в библиотеке (иначе тесты библиотеки не соберутся:
+        «Неизвестный тип: 'TON'», проверено на 3.5.17.30).
+        """
         modes = self.node("modes")
         if mode not in modes:
             raise CdsError(f"config.json: нет режима {mode} / no mode {mode}", EXIT_USAGE)
-        cfg = modes[mode]
+        keys: list[str] = []
+        for key in [str(k) for k in modes[mode].get("libraries", [])] + self.own_library_keys():
+            if key not in keys:
+                keys.append(key)
+        return keys
+
+    def mode_config(self, mode: str) -> dict[str, Any]:
+        keys = self.mode_library_keys(mode)  # заодно проверяет, что режим есть
         return {
-            "tasks": list(cfg.get("tasks", [])),
-            "libraries": [self.library_spec(k) for k in cfg.get("libraries", [])],
+            "tasks": list(self.node("modes")[mode].get("tasks", [])),
+            "libraries": [self.library_spec(k) for k in keys],
         }
 
     def other_libraries(self, mode: str) -> list[dict[str, Any]]:
         modes = self.node("modes")
-        mine = set(modes[mode].get("libraries", []))
-        keys = sorted({k for m in modes.values() for k in m.get("libraries", [])} - mine)
+        mine = set(self.mode_library_keys(mode))
+        keys = sorted({str(k) for m in modes.values() for k in m.get("libraries", [])} - mine)
         return [self.library_spec(k) for k in keys]
+
+    def referenced_library_keys(self) -> list[str]:
+        """Ключи libraries, на которые ссылаются режимы и сама библиотека (library.libraries), без повторов."""
+        keys: list[str] = []
+        for key in [str(k) for m in self.node("modes").values() for k in m.get("libraries", [])]:
+            if key not in keys:
+                keys.append(key)
+        for key in self.own_library_keys():
+            if key not in keys:
+                keys.append(key)
+        return keys
+
+    @property
+    def library_repository(self) -> str:
+        """Репозиторий библиотек CODESYS для установки (по имени; пусто — первый в списке)."""
+        if "library_repository" not in self.config:
+            return "System"
+        return str(self.value("library_repository.name") or "")
+
+    def library_config(self) -> dict[str, Any]:
+        """Раздел library: Project Information, пути, исключения и ссылки библиотеки этого репозитория."""
+        node = self.node("library")
+        info: dict[str, Any] = {k: (self.value(f"library.{k}") if k in node else None) for k in LIBRARY_INFO_KEYS}
+        info["version"] = str(info["version"]) if info["version"] is not None else None
+        released = info.get("released")
+        if isinstance(released, str):
+            released = released.strip().lower() in ("1", "true", "yes")
+        info["released"] = bool(released)
+        problems = C.library_problems(info)
+        if problems:
+            raise CdsError("config.json: " + "; ".join(problems), EXIT_USAGE)
+        return {
+            "info": info,
+            "path": self.path("library.path"),
+            "compiled_path": self.path("library.compiled_path"),
+            "exclude": [str(x) for x in node.get("exclude", [])],
+            "libraries": [self.library_spec(k) for k in node.get("libraries", [])],
+            "label": C.reference_name(info["title"], info["version"], info["company"]),
+        }
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -521,12 +664,29 @@ def runtime_lock(settings: Settings, purpose: str) -> FileLock:
 
 
 def repo_lock(settings: Settings, purpose: str) -> FileLock:
-    """Блокировка репозитория: один процесс CODESYS на проекты этого репозитория."""
+    """Блокировка рабочей копии: один процесс CODESYS на проекты этого checkout (build/ у каждого свой).
+
+    Параллельные git worktree одного репозитория — разные каталоги, у каждого свои build/ и
+    блокировка; общие на машину — только рантайм и репозиторий библиотек (свои блокировки).
+    """
     return FileLock(
         settings.repo_root / WORK_DIR / "cds.lock",
         settings.number("lock.timeout_s"),
         purpose=f"{purpose} {settings.repo_root}",
     )
+
+
+def library_lock(settings: Settings, purpose: str) -> FileLock:
+    """Глобальная блокировка репозитория библиотек CODESYS: установка и удаление — по одному процессу.
+
+    Порядок взятия блокировок везде один: рабочая копия -> рантайм -> репозиторий библиотек;
+    cds.py соседнего репозитория (build_from_repo) запускается, когда этот процесс их не держит.
+    """
+    if "library_repository" in settings.config:
+        path = settings.path("library_repository.lock")
+    else:
+        path = settings.path("lock.path").with_name("codesys-library-repo.lock")
+    return FileLock(path, settings.number("lock.timeout_s"), purpose=f"{purpose} {settings.repo_root}")
 
 
 # ---------------------------------------------------------------------------
@@ -648,10 +808,65 @@ def import_step(
         "other_libraries": settings.other_libraries(mode),
         "project": str(project),
         "device": settings.device(),
+        "library_repository": settings.library_repository,
         "clean": clean,
         "reopen": reopen,
         "log": str(logs / f"{name}.log"),
         "report": str(logs / f"{name}.json"),
+    }
+
+
+def library_step(
+    settings: Settings, lib: Mapping[str, Any], install: bool, compiled: bool, released: bool = False
+) -> dict[str, Any]:
+    """Шаг library: src/ -> build/<имя>.library (+ .compiled-library) и, по флагу, установка."""
+    info = dict(lib["info"])
+    if released:
+        info["released"] = True
+    build = settings.repo_root / "build"
+    return {
+        "action": "library",
+        "repo_root": str(settings.repo_root),
+        "tests_folder": settings.tests_folder,
+        # временный проект: projects.create всегда создаёт .project, библиотека — save_as(.library)
+        "project": str(settings.repo_root / WORK_DIR / f"{settings.value('project.name')}-library.project"),
+        "library": str(lib["path"]),
+        "compiled": str(lib["compiled_path"]) if compiled else None,
+        "info": info,
+        "libraries": list(lib["libraries"]),
+        "exclude": list(lib["exclude"]),
+        "repository": settings.library_repository,
+        "install": {"compiled": compiled} if install else None,
+        "log": str(build / "library.log"),
+        "report": str(build / "library.json"),
+    }
+
+
+def deps_step(
+    settings: Settings, specs: Sequence[Mapping[str, Any]], install_missing: bool, reinstall: Sequence[str] = ()
+) -> dict[str, Any]:
+    """Шаг deps: есть ли библиотеки в репозиториях; отсутствующие — установка из install_from."""
+    build = settings.repo_root / "build"
+    return {
+        "action": "deps",
+        "specs": [dict(s) for s in specs],
+        "install_missing": install_missing,
+        "reinstall": list(reinstall),
+        "repository": settings.library_repository,
+        "log": str(build / "deps.log"),
+        "report": str(build / "deps.json"),
+    }
+
+
+def uninstall_step(settings: Settings, info: Mapping[str, Any], versions: Sequence[str]) -> dict[str, Any]:
+    """Шаг uninstall: удаление версий библиотеки (пустой список — всех) из репозитория."""
+    return {
+        "action": "uninstall",
+        "title": info["title"],
+        "company": info["company"],
+        "versions": list(versions),
+        "repository": settings.library_repository,
+        "log": str(settings.repo_root / "build" / "library-uninstall.log"),
     }
 
 
@@ -785,9 +1000,13 @@ def source_location(obj_path: str | None, position: str | None, objects: Sequenc
     return f"{wanted}:{line}" if line else wanted
 
 
-def annotate_build(settings: Settings, result: Mapping[str, Any]) -> None:
-    """Добавляет к сообщениям сборки поле source (файл:строка) и переписывает build/build.json."""
-    step = next((s for s in result.get("steps", []) if s.get("action") == "build"), None)
+def annotate_build(settings: Settings, result: Mapping[str, Any], action: str = "build") -> None:
+    """Добавляет к сообщениям компилятора поле source (файл:строка) и переписывает build/<action>.json.
+
+    action — шаг с сообщениями: build (сборка приложения) или library (проверка пула библиотеки:
+    пути объектов там от корня проекта — 'Motors.FB_X', их разбирает тот же source_location).
+    """
+    step = next((s for s in result.get("steps", []) if s.get("action") == action), None)
     if not step or not step.get("messages"):
         return
     try:
@@ -796,7 +1015,7 @@ def annotate_build(settings: Settings, result: Mapping[str, Any]) -> None:
         return
     for msg in step["messages"]:
         msg["source"] = source_location(msg.get("object"), msg.get("position"), objects)
-    report = settings.repo_root / "build" / "build.json"
+    report = settings.repo_root / "build" / f"{action}.json"
     if report.exists():
         data = json.loads(report.read_text(encoding="utf-8"))
         data["messages"] = step["messages"]
@@ -807,6 +1026,16 @@ def annotate_build(settings: Settings, result: Mapping[str, Any]) -> None:
 def _step(result: Mapping[str, Any], action: str, index: int = 0) -> dict[str, Any]:
     found = [s for s in result.get("steps", []) if s.get("action") == action]
     return dict(found[index]) if len(found) > index else {}
+
+
+def _print_messages(step: Mapping[str, Any]) -> None:
+    for msg in step.get("messages", []):
+        if msg.get("severity") in ("Error", "FatalError", "Warning"):
+            where = f" [{msg['object']}{', ' + msg['position'] if msg.get('position') else ''}]"
+            if not msg.get("object"):
+                where = ""
+            prefix = f"{msg['source']}: " if msg.get("source") else ""
+            print(f"[cds]   {prefix}{msg['severity']} {msg.get('code') or ''} {msg.get('text')}{where}")
 
 
 def _print_steps(result: Mapping[str, Any]) -> None:
@@ -823,15 +1052,25 @@ def _print_steps(result: Mapping[str, Any]) -> None:
             for bucket in ("removed",):
                 for item in step.get(bucket, []):
                     print(f"[cds]   удалено: {item}")
+            for item in step.get("created", []) + step.get("updated", []):
+                if str(item).startswith("LIBRARY"):
+                    print(f"[cds]   {item}")
         elif action == "build":
             detail = f"ошибок {step.get('errors')}, предупреждений {step.get('warnings')}"
-            for msg in step.get("messages", []):
-                if msg.get("severity") in ("Error", "FatalError", "Warning"):
-                    where = f" [{msg['object']}{', ' + msg['position'] if msg.get('position') else ''}]"
-                    if not msg.get("object"):
-                        where = ""
-                    prefix = f"{msg['source']}: " if msg.get("source") else ""
-                    print(f"[cds]   {prefix}{msg['severity']} {msg.get('code') or ''} {msg.get('text')}{where}")
+            _print_messages(step)
+        elif action == "library":
+            detail = (
+                f"объектов {step.get('objects', 0)}, ошибок проверки пула {step.get('errors', '-')}, "
+                f"предупреждений {step.get('warnings', '-')}"
+            )
+            _print_messages(step)
+            for warn in step.get("log_warnings", []):
+                print(f"[cds]   предупреждение: {warn}")
+        elif action == "deps":
+            found = [e for e in step.get("libraries", []) if e.get("found")]
+            detail = f"найдено {len(found)} из {len(step.get('libraries', []))}"
+        elif action == "uninstall":
+            detail = f"удалено {len(step.get('removed', []))}"
         elif action == "export":
             detail = (
                 f"файлов {step.get('files')}, объектов src {step.get('objects_src')}, tests {step.get('objects_tests')}"
@@ -847,6 +1086,8 @@ def _print_steps(result: Mapping[str, Any]) -> None:
             else:
                 detail = "тесты не выполнялись"
         print(f"[cds] {action}: {status} ({detail}, {step.get('duration_s')} с)")
+        for item in step.get("installed_libraries") or []:
+            print(f"[cds]   установлена в репозиторий библиотек (install_from): {item}")
         warnings = step.get("warnings")
         for warn in warnings if isinstance(warnings, list) else []:
             print(f"[cds]   предупреждение: {warn}")
@@ -865,20 +1106,284 @@ def _finish(result: Mapping[str, Any]) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Подкоманды: import, export, build, test, roundtrip
+# Библиотеки-зависимости: сборка в соседних репозиториях, учёт установок
+# ---------------------------------------------------------------------------
+
+
+def missing_library_keys(result: Mapping[str, Any]) -> list[str]:
+    """Ключи libraries, которых шаг import/library не нашёл в репозиториях (поле missing_libraries)."""
+    keys: list[str] = []
+    for step in result.get("steps", []):
+        for key in step.get("missing_libraries") or []:
+            if str(key) not in keys:
+                keys.append(str(key))
+    return keys
+
+
+def dependency_command(python: str, repo: Path, result_path: Path) -> list[str]:
+    """Сборка и установка библиотеки в её репозитории: <python> <repo>/tools/codesys/cds.py library --install."""
+    return [python, str(repo / "tools" / "codesys" / "cds.py"), "library", "--install", "--result", str(result_path)]
+
+
+def dependency_source_info(repo: Path, environ: Mapping[str, str]) -> dict[str, Any]:
+    """Project Information библиотеки, которую собирает репозиторий repo (его config.json: library).
+
+    Настройки читаются с окружением без переменных рабочей копии (CHECKOUT_ENV): например,
+    CDS_LIBRARY_VERSION этого процесса не должен менять версию соседней библиотеки.
+    """
+    launcher = repo / "tools" / "codesys" / "cds.py"
+    if not launcher.is_file():
+        raise CdsError(f"нет {launcher}: это не репозиторий с tools/codesys / not a library repository", EXIT_ENV)
+    try:
+        info = make_settings(repo, environ=child_environ(environ)).library_config()["info"]
+    except CdsError as exc:
+        raise CdsError(
+            f"{repo}: раздел library в tools/codesys/config.json не читается ({exc}) — репозиторий не настроен "
+            "как библиотека или его инструменты устарели / dependency repository has no library config",
+            EXIT_ENV,
+        ) from None
+    return dict(info)
+
+
+def dependency_problems(spec: Mapping[str, Any], info: Mapping[str, Any]) -> list[str]:
+    """Соберёт ли репозиторий (info — его library) ту библиотеку и версию, которую ждёт spec."""
+    rec = {"title": info.get("title"), "company": info.get("company"), "namespace": info.get("default_namespace")}
+    key = spec.get("key")
+    problems: list[str] = []
+    if not C.lib_matches_identity(rec, dict(spec)):
+        problems.append(
+            f"собирает «{info.get('title')}» ({info.get('company')}), а libraries.{key} описывает другую библиотеку "
+            "(title, title_contains, company)"
+        )
+    if not C.version_matches(spec.get("version"), info.get("version")):
+        problems.append(
+            f"собирает версию {info.get('version')}, а закреплена {spec.get('version')}: переключите этот "
+            f"репозиторий на нужную версию (git checkout <тег>) или измените libraries.{key}.version"
+        )
+    return problems
+
+
+def _run_streamed(cmd: Sequence[str], cwd: Path, env: Mapping[str, str], prefix: str) -> int:
+    """Дочерний cds.py: вывод построчно с префиксом, код выхода. Таймауты — у самого дочернего процесса."""
+    proc = subprocess.Popen(
+        list(cmd),
+        cwd=str(cwd),
+        env=dict(env),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if proc.stdout is not None:
+        for raw in proc.stdout:
+            print(f"{prefix}{raw.decode('utf-8', 'replace').rstrip()}", flush=True)
+    return proc.wait()
+
+
+def build_dependency(
+    settings: Settings, spec: Mapping[str, Any], environ: Mapping[str, str] | None = None
+) -> dict[str, Any]:
+    """Собирает и устанавливает библиотеку spec в её репозитории (build_from_repo); результат дочернего cds.py.
+
+    Перед сборкой — проверка по config.json того репозитория: та ли библиотека и подходит ли её
+    версия под закрепление (иначе сборка была бы напрасной). Дочерний cds.py берёт блокировки своей
+    рабочей копии и репозитория библиотек.
+    """
+    env = os.environ if environ is None else environ
+    key = str(spec["key"])
+    if not spec.get("build_from_repo"):
+        raise CdsError(f"libraries.{key}: не задан build_from_repo / no build_from_repo", EXIT_USAGE)
+    repo = Path(str(spec["build_from_repo"]))
+    if not repo.is_dir():
+        where = spec.get("build_env") or f"libraries.{key}.build_from_repo"
+        raise CdsError(
+            f"libraries.{key}: нет каталога {repo} — клонируйте репозиторий библиотеки или задайте путь в {where}",
+            EXIT_ENV,
+        )
+    if repo.resolve() == settings.repo_root.resolve():
+        raise CdsError(f"libraries.{key}.build_from_repo указывает на этот же репозиторий", EXIT_USAGE)
+    chain = dependency_chain(env) + [_chain_key(settings.repo_root)]
+    if _chain_key(repo) in chain:
+        names = " -> ".join(Path(p).name for p in [*chain, _chain_key(repo)])
+        raise CdsError(
+            f"циклическая зависимость библиотек: {names} (libraries.*.build_from_repo, library.libraries) — "
+            "библиотека не может через другие зависеть от себя / dependency cycle",
+            EXIT_USAGE,
+        )
+    info = dependency_source_info(repo, env)
+    problems = dependency_problems(spec, info)
+    if problems:
+        raise CdsError(f"библиотека {key} из {repo}: " + "; ".join(problems), EXIT_ENV)
+    result_path = settings.repo_root / WORK_DIR / "deps" / f"{key}.json"
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileNotFoundError):
+        result_path.unlink()
+    label = C.reference_name(info["title"], info["version"], info["company"])
+    print(f"[cds] {key}: сборка и установка {label} в {repo}", flush=True)
+    child_env = child_environ(env)
+    child_env[DEPS_CHAIN_ENV] = os.pathsep.join(chain)
+    code = _run_streamed(dependency_command(sys.executable, repo, result_path), repo, child_env, f"[{key}] ")
+    if code != EXIT_OK:
+        log = repo / "build" / "library.log"
+        if code == EXIT_FAILED:
+            why = f"ошибки проверки библиотеки — сообщения выше, журнал: {log}"
+        elif code == EXIT_USAGE:
+            why = (
+                "ошибка аргументов или настроек того репозитория — сообщение выше (если у него нет команды library, "
+                "обновите его tools/codesys)"
+            )
+        else:
+            why = f"журнал: {log}"
+        raise CdsError(
+            f"сборка библиотеки {key} в {repo} не удалась (код {code}): {why} / dependency build failed",
+            code if code in (EXIT_FAILED, EXIT_TIMEOUT, EXIT_LOCK) else EXIT_ENV,
+        )
+    try:
+        data: dict[str, Any] = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise CdsError(f"{repo}: cds.py library не записал результат {result_path}", EXIT_ENV) from None
+    installed = data.get("installed") or {}
+    if not (
+        C.lib_matches_identity(installed, dict(spec))
+        and C.version_matches(spec.get("version"), installed.get("version"))
+    ):
+        raise CdsError(f"{repo}: установлена {installed.get('displayname')}, а libraries.{key} ждёт другую", EXIT_ENV)
+    return data
+
+
+def run_with_deps(settings: Settings, run: Callable[[], dict[str, Any]], allow: bool) -> dict[str, Any]:
+    """Задание с импортом; если нет библиотек, которые собираются из соседних репозиториев, — сборка и повтор.
+
+    run выполняется под своими блокировками; зависимости собираются между двумя запусками, когда
+    этот процесс блокировок не держит. Повтор — один: если библиотеки так и не нашлись, ошибка
+    второго запуска выводится как есть.
+    """
+    result = run()
+    keys = missing_library_keys(result)
+    if not keys or not allow:
+        return result
+    specs = [settings.library_spec(k) for k in keys]
+    if not all(s.get("build_from_repo") for s in specs):
+        return result
+    print(
+        f"[cds] в репозиториях CODESYS нет библиотек (или их зависимостей) {', '.join(keys)} — сборка в соседних "
+        "репозиториях (отключить: --no-deps)",
+        flush=True,
+    )
+    for spec in specs:
+        build_dependency(settings, spec)
+    print("[cds] зависимости установлены — повтор", flush=True)
+    return run()
+
+
+def install_registry_path(settings: Settings) -> Path:
+    if "library_repository" in settings.config:
+        return settings.path("library_repository.registry")
+    return settings.path("lock.path").with_name("codesys-libraries.json")
+
+
+def registry_key(company: Any, title: Any, version: Any) -> str:
+    parsed = C.parse_version(version)
+    text = ".".join(str(p) for p in parsed) if parsed else str(version)
+    return f"{company}|{title}|{text}".lower()
+
+
+def load_install_registry(path: Path) -> dict[str, Any]:
+    """Учёт установок cds.py library --install: «компания|название|версия» -> откуда установлена."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    libs = data.get("libraries") if isinstance(data, dict) else None
+    return libs if isinstance(libs, dict) else {}
+
+
+def save_install_registry(path: Path, libs: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    text = json.dumps({"libraries": dict(libs)}, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def record_install(settings: Settings, installed: Mapping[str, Any], commit: str | None) -> str | None:
+    """Запись об установке (рабочая копия, коммит, отпечаток src/); предупреждение, если та же версия
+    была установлена из другой рабочей копии. Вызывается под блокировкой репозитория библиотек."""
+    path = install_registry_path(settings)
+    libs = load_install_registry(path)
+    key = registry_key(installed.get("company"), installed.get("title"), installed.get("version"))
+    previous = libs.get(key) if isinstance(libs.get(key), dict) else {}
+    libs[key] = {
+        "displayname": installed.get("displayname"),
+        "checkout": str(settings.repo_root),
+        "commit": commit,
+        "sources": sources_digest(settings.repo_root, ("src",)),
+        "file": installed.get("file"),
+        "compiled": bool(installed.get("compiled")),
+        "installed_at": dt.datetime.now().isoformat(timespec="seconds"),
+    }
+    save_install_registry(path, libs)
+    other = (previous or {}).get("checkout")
+    if other and os.path.normcase(os.path.normpath(other)) != os.path.normcase(
+        os.path.normpath(str(settings.repo_root))
+    ):
+        return f"{installed.get('displayname')} была установлена из другой рабочей копии {other} — заменена"
+    return None
+
+
+def forget_installs(settings: Settings, displaynames: Sequence[str]) -> None:
+    path = install_registry_path(settings)
+    libs = load_install_registry(path)
+    changed = False
+    for name in displaynames:
+        parsed = C.parse_reference_name(name)
+        if parsed and libs.pop(registry_key(parsed["company"], parsed["title"], parsed["version"]), None) is not None:
+            changed = True
+    if changed:
+        save_install_registry(path, libs)
+
+
+def install_provenance(settings: Settings, spec: Mapping[str, Any], entry: Mapping[str, Any]) -> list[str]:
+    """Откуда установлена найденная версия и предупреждения: другая рабочая копия, изменились исходники."""
+    libs = load_install_registry(install_registry_path(settings))
+    rec = libs.get(registry_key(entry.get("company"), entry.get("title"), entry.get("version")))
+    if not isinstance(rec, dict):
+        return []
+    commit = rec.get("commit") or "без коммита git"
+    lines = [f"установлена cds.py из {rec.get('checkout')} @ {commit} ({rec.get('installed_at')})"]
+    src = spec.get("build_from_repo")
+    checkout = rec.get("checkout")
+    if src and checkout and os.path.normcase(os.path.normpath(checkout)) != os.path.normcase(os.path.normpath(src)):
+        lines.append(
+            f"предупреждение: установлена из другой рабочей копии, не из {src} — пересобрать: "
+            f"cds.py deps --rebuild {spec['key']}"
+        )
+    elif src and rec.get("sources") and Path(src).is_dir() and sources_digest(Path(src), ("src",)) != rec["sources"]:
+        lines.append(
+            f"предупреждение: исходники {Path(src) / 'src'} изменились после установки — пересобрать: "
+            f"cds.py deps --rebuild {spec['key']}"
+        )
+    return lines
+
+
+# ---------------------------------------------------------------------------
+# Подкоманды: import, export, build, test, roundtrip, library, deps
 # ---------------------------------------------------------------------------
 
 
 def cmd_import(settings: Settings, args: argparse.Namespace) -> int:
     project = settings.project_path(args.tests)
-    with repo_lock(settings, "import"):
-        check_project_state(settings, project, args.force or args.clean)
-        job = {"steps": [import_step(settings, args.tests, project, clean=args.clean)]}
-        result = run_codesys(settings, "import_sources.py", job, "import")
-        if result.get("ok"):
-            record_project_state(settings, project, layout_subdirs(args.tests))
-            print(f"[cds] проект: {project}")
-    return _finish(result)
+
+    def run() -> dict[str, Any]:
+        with repo_lock(settings, "import"):
+            check_project_state(settings, project, args.force or args.clean)
+            job = {"steps": [import_step(settings, args.tests, project, clean=args.clean)]}
+            result = run_codesys(settings, "import_sources.py", job, "import")
+            if result.get("ok"):
+                record_project_state(settings, project, layout_subdirs(args.tests))
+                print(f"[cds] проект: {project}")
+            return result
+
+    return _finish(run_with_deps(settings, run, not args.no_deps))
 
 
 def cmd_export(settings: Settings, args: argparse.Namespace) -> int:
@@ -899,17 +1404,22 @@ def cmd_export(settings: Settings, args: argparse.Namespace) -> int:
 
 def cmd_build(settings: Settings, args: argparse.Namespace) -> int:
     project = settings.project_path(args.tests)
-    steps: list[dict[str, Any]] = []
-    with repo_lock(settings, "build"):
-        if not args.no_import:
-            check_project_state(settings, project, args.force)
-            steps.append(import_step(settings, args.tests, project))
-        elif not project.exists():
-            raise CdsError(f"нет проекта {project}: уберите --no-import или выполните import", EXIT_ENV)
-        steps.append(build_step(settings, project))
-        result = run_codesys(settings, "build.py", {"steps": steps}, "build")
-        if _step(result, "import").get("ok"):
-            record_project_state(settings, project, layout_subdirs(args.tests))
+
+    def run() -> dict[str, Any]:
+        steps: list[dict[str, Any]] = []
+        with repo_lock(settings, "build"):
+            if not args.no_import:
+                check_project_state(settings, project, args.force)
+                steps.append(import_step(settings, args.tests, project))
+            elif not project.exists():
+                raise CdsError(f"нет проекта {project}: уберите --no-import или выполните import", EXIT_ENV)
+            steps.append(build_step(settings, project))
+            result = run_codesys(settings, "build.py", {"steps": steps}, "build")
+            if _step(result, "import").get("ok"):
+                record_project_state(settings, project, layout_subdirs(args.tests))
+            return result
+
+    result = run_with_deps(settings, run, not args.no_deps)
     annotate_build(settings, result)
     return _finish(result)
 
@@ -934,23 +1444,32 @@ def cmd_test(settings: Settings, args: argparse.Namespace) -> int:
     project = settings.project_path(True)
     results_path = settings.path("tests.results")
     junit_path = settings.path("tests.junit")
-    with repo_lock(settings, "test"), runtime_lock(settings, f"test {settings.repo_root.name}"):
-        # Результаты прошлого прогона удаляются: при ошибке сборки или входа в рантайм старый
-        # junit.xml с зелёными тестами иначе остался бы в build/ и ввёл бы в заблуждение CI
-        for stale in (results_path, junit_path):
-            with contextlib.suppress(FileNotFoundError):
-                stale.unlink()
-        check_project_state(settings, project, args.force)
-        runtime = ensure_runtime(settings, restart=args.restart_runtime, allow_start=not args.no_runtime_start)
-        steps = [
-            import_step(settings, True, project, clean=args.clean),
-            build_step(settings, project),
-            test_step(settings, project),
-        ]
-        timeout = settings.number("codesys.timeout_s") + settings.number("tests.timeout_s")
-        result = run_codesys(settings, "run_tests.py", {"steps": steps}, "test", timeout_s=timeout)
-        if _step(result, "import").get("ok"):
-            record_project_state(settings, project, layout_subdirs(True))
+    runtime: dict[str, Any] = {}
+
+    def run() -> dict[str, Any]:
+        with repo_lock(settings, "test"), runtime_lock(settings, f"test {settings.repo_root.name}"):
+            # Результаты прошлого прогона удаляются: при ошибке сборки или входа в рантайм старый
+            # junit.xml с зелёными тестами иначе остался бы в build/ и ввёл бы в заблуждение CI
+            for stale in (results_path, junit_path):
+                with contextlib.suppress(FileNotFoundError):
+                    stale.unlink()
+            check_project_state(settings, project, args.force)
+            runtime.clear()
+            runtime.update(
+                ensure_runtime(settings, restart=args.restart_runtime, allow_start=not args.no_runtime_start)
+            )
+            steps = [
+                import_step(settings, True, project, clean=args.clean),
+                build_step(settings, project),
+                test_step(settings, project),
+            ]
+            timeout = settings.number("codesys.timeout_s") + settings.number("tests.timeout_s")
+            result = run_codesys(settings, "run_tests.py", {"steps": steps}, "test", timeout_s=timeout)
+            if _step(result, "import").get("ok"):
+                record_project_state(settings, project, layout_subdirs(True))
+            return result
+
+    result = run_with_deps(settings, run, not args.no_deps)
     annotate_build(settings, result)
     build = _step(result, "build")
     if results_path.exists():
@@ -1005,16 +1524,20 @@ def cmd_roundtrip(settings: Settings, args: argparse.Namespace) -> int:
     rt_dir = settings.path("project.roundtrip_dir")
     export_dir = rt_dir / "export"
     project = rt_dir / f"{settings.value('project.name')}-roundtrip.project"
-    with repo_lock(settings, "roundtrip"):
-        if export_dir.exists():
-            shutil.rmtree(export_dir)
-        rt_dir.mkdir(parents=True, exist_ok=True)
-        steps = [
-            import_step(settings, True, project, clean=True, log_dir=rt_dir, name="import"),
-            export_step(settings, project, export_dir, True, log_dir=rt_dir),
-            import_step(settings, True, project, log_dir=rt_dir, name="import2", reopen=True),
-        ]
-        result = run_codesys(settings, "import_sources.py", {"steps": steps}, "roundtrip")
+
+    def run() -> dict[str, Any]:
+        with repo_lock(settings, "roundtrip"):
+            if export_dir.exists():
+                shutil.rmtree(export_dir)
+            rt_dir.mkdir(parents=True, exist_ok=True)
+            steps = [
+                import_step(settings, True, project, clean=True, log_dir=rt_dir, name="import"),
+                export_step(settings, project, export_dir, True, log_dir=rt_dir),
+                import_step(settings, True, project, log_dir=rt_dir, name="import2", reopen=True),
+            ]
+            return run_codesys(settings, "import_sources.py", {"steps": steps}, "roundtrip")
+
+    result = run_with_deps(settings, run, not args.no_deps)
     _print_steps(result)
     if not result.get("ok"):
         return EXIT_FAILED if result.get("exit_code") == 1 else EXIT_ENV
@@ -1043,6 +1566,157 @@ def cmd_roundtrip(settings: Settings, args: argparse.Namespace) -> int:
     }
     (rt_dir / "roundtrip.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return EXIT_OK if summary["ok"] else EXIT_FAILED
+
+
+def library_summary(result: Mapping[str, Any], code: int) -> dict[str, Any]:
+    """Краткий итог cds.py library для --result (его читает cds.py репозитория-потребителя)."""
+    step = _step(result, "library")
+    return {
+        "ok": code == EXIT_OK,
+        "exit_code": code,
+        "library": step.get("library"),
+        "compiled": step.get("compiled"),
+        "installed": step.get("installed"),
+        "project_info": step.get("project_info"),
+        "errors": step.get("errors"),
+        "warnings": step.get("warnings"),
+        "error": step.get("error") or result.get("error"),
+    }
+
+
+def cmd_library(settings: Settings, args: argparse.Namespace) -> int:
+    if args.uninstall and (args.install or args.compiled or args.released):
+        raise CdsError("--uninstall не сочетается с --install, --compiled, --released", EXIT_USAGE)
+    if args.all_versions and not args.uninstall:
+        raise CdsError("--all-versions — только вместе с --uninstall", EXIT_USAGE)
+    lib = settings.library_config()
+    if args.uninstall:
+        return library_uninstall(settings, lib, args.all_versions)
+    step = library_step(settings, lib, args.install, args.compiled, args.released)
+
+    def run() -> dict[str, Any]:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(repo_lock(settings, "library"))
+            if args.install:
+                stack.enter_context(library_lock(settings, f"library {lib['label']}"))
+            stale = Path(lib["compiled_path"])
+            if not args.compiled and stale.is_file():
+                # .compiled-library прошлой сборки не соответствует новой .library (другие исходники
+                # или версия) — в build/ остаются только файлы этой сборки
+                stale.unlink()
+                print(f"[cds] удалена {stale.name} прошлой сборки (скомпилированная библиотека — с --compiled)")
+            result = run_codesys(settings, "make_library.py", {"steps": [step]}, "library")
+            installed = _step(result, "library").get("installed")
+            if result.get("ok") and installed:
+                warning = record_install(settings, installed, _git_commit(settings.repo_root))
+                if warning:
+                    result["registry_warning"] = warning
+            return result
+
+    result = run_with_deps(settings, run, not args.no_deps)
+    annotate_build(settings, result, "library")
+    code = _finish(result)
+    done = _step(result, "library")
+    if done.get("ok"):
+        print(f"[cds] библиотека {lib['label']}: {done.get('library')}")
+        if done.get("compiled"):
+            print(f"[cds] скомпилированная библиотека: {done['compiled']}")
+        installed = done.get("installed")
+        if installed:
+            how = "заменена" if installed.get("replaced") else "установлена"
+            print(
+                f"[cds] {how}: {installed.get('displayname')} (пространство имён {installed.get('namespace')}) -> "
+                f"репозиторий {installed.get('repository')}: {installed.get('file')}"
+            )
+    if result.get("registry_warning"):
+        print(f"[cds] предупреждение: {result['registry_warning']}")
+    if args.result:
+        out = Path(args.result)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        text = json.dumps(library_summary(result, code), indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+        out.write_text(text, encoding="utf-8", newline="\n")
+    return code
+
+
+def library_uninstall(settings: Settings, lib: Mapping[str, Any], all_versions: bool) -> int:
+    info = lib["info"]
+    versions = [] if all_versions else [str(info["version"])]
+    with library_lock(settings, f"uninstall {lib['label']}"):
+        result = run_codesys(
+            settings, "library_repo.py", {"steps": [uninstall_step(settings, info, versions)]}, "uninstall"
+        )
+        step = _step(result, "uninstall")
+        if result.get("ok"):
+            forget_installs(settings, step.get("removed", []))
+    code = _finish(result)
+    for name in step.get("removed", []):
+        print(f"[cds] удалена из репозитория {step.get('repository')}: {name}")
+    if step.get("ok"):
+        left = ", ".join(step.get("left") or []) or "нет"
+        print(f"[cds] осталось версий {info['title']} ({info['company']}): {left}")
+    return code
+
+
+def cmd_deps(settings: Settings, args: argparse.Namespace) -> int:
+    keys = list(args.keys) or settings.referenced_library_keys()
+    specs = [settings.library_spec(k) for k in keys]
+    if not specs:
+        print("[cds] в config.json нет библиотек-зависимостей (modes.*.libraries, library.libraries)")
+        return EXIT_OK
+    reinstall = [
+        str(s["key"]) for s in specs if args.rebuild and s.get("install_from") and not s.get("build_from_repo")
+    ]
+    with library_lock(settings, "deps"):
+        job = {"steps": [deps_step(settings, specs, not args.check, reinstall)]}
+        result = run_codesys(settings, "library_repo.py", job, "deps")
+    if not result.get("ok"):
+        return _finish(result)
+    entries = {str(e.get("key")): e for e in _step(result, "deps").get("libraries", [])}
+    built: dict[str, dict[str, Any]] = {}
+    if not args.check:
+        for spec in specs:
+            entry = entries.get(str(spec["key"])) or {}
+            # библиотека без своих зависимостей (missing_dependencies) пересобирается: сборка в её
+            # репозитории ставит и зависимости (они описаны в его config.json)
+            incomplete = not entry.get("found") or entry.get("missing_dependencies")
+            if spec.get("build_from_repo") and (args.rebuild or incomplete):
+                built[str(spec["key"])] = build_dependency(settings, spec)
+    missing: list[str] = []
+    print("[cds] библиотеки-зависимости:")
+    for spec in specs:
+        key = str(spec["key"])
+        entry = entries.get(key) or {}
+        pin = spec.get("version") or C.VERSION_NEWEST
+        if key in built:
+            installed = built[key].get("installed") or {}
+            source = spec["build_from_repo"]
+            print(f"[cds]   {key} {pin}: {installed.get('displayname')} — собрана в {source} и установлена")
+        elif entry.get("found"):
+            how = "установлена из файла" if entry.get("installed_now") else "есть в репозитории"
+            versions = ", ".join(entry.get("installed_versions") or [])
+            print(f"[cds]   {key} {pin}: {entry.get('displayname')} — {how} (установлены версии: {versions})")
+            for line in install_provenance(settings, spec, entry):
+                print(f"[cds]     {line}")
+            if entry.get("missing_dependencies"):
+                print(f"[cds]     НЕТ её зависимостей: {', '.join(entry['missing_dependencies'])}")
+                missing.append(key)
+        else:
+            have = ", ".join(entry.get("installed_versions") or []) or "нет"
+            print(f"[cds]   {key} {pin}: НЕТ (установлены версии: {have})")
+            missing.append(key)
+    if missing:
+        if args.check:
+            print(
+                f"[cds] нет библиотек (или их зависимостей): {', '.join(missing)} "
+                "(cds.py deps без --check установит или соберёт их)"
+            )
+            return EXIT_FAILED
+        raise CdsError(
+            f"нет библиотек (или их зависимостей) {', '.join(missing)}: задайте файл .library (install_from) или "
+            "репозиторий (build_from_repo) в config.json: libraries / missing libraries",
+            EXIT_ENV,
+        )
+    return EXIT_OK
 
 
 # ---------------------------------------------------------------------------
@@ -1513,14 +2187,17 @@ def cmd_report(settings: Settings, args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cds.py",
-        description="Импорт, сборка, тесты и экспорт CODESYS 3.5 из консоли (docs/MANUAL_STEPS.md).",
+        description="Импорт, сборка, тесты, экспорт и библиотеки CODESYS 3.5 из консоли (docs/MANUAL_STEPS.md).",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    no_deps_help = "не собирать недостающие библиотеки в соседних репозиториях (libraries.*.build_from_repo)"
 
     p = sub.add_parser("import", help="исходники src/ (и tests/) -> проект CODESYS")
     p.add_argument("--tests", action="store_true", help="с tests/ в тестовый проект (режим test)")
     p.add_argument("--clean", action="store_true", help="пересоздать проект с нуля")
     p.add_argument("--force", action="store_true", help="перезаписать проект, даже если он сохранён в IDE")
+    p.add_argument("--no-deps", action="store_true", help=no_deps_help)
     p.set_defaults(func=cmd_import)
 
     p = sub.add_parser("export", help="проект CODESYS -> раскладка src/ (и tests/)")
@@ -1533,6 +2210,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tests", action="store_true", help="собрать тестовый проект")
     p.add_argument("--no-import", action="store_true", help="собрать проект как есть, без импорта")
     p.add_argument("--force", action="store_true", help="импортировать, даже если проект сохранён в IDE")
+    p.add_argument("--no-deps", action="store_true", help=no_deps_help)
     p.set_defaults(func=cmd_build)
 
     p = sub.add_parser("test", help="импорт с тестами, сборка, прогон coUnit в рантайме")
@@ -1540,10 +2218,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-runtime-start", action="store_true", help="не запускать рантайм автоматически")
     p.add_argument("--clean", action="store_true", help="пересоздать тестовый проект с нуля")
     p.add_argument("--force", action="store_true", help="импортировать, даже если проект сохранён в IDE")
+    p.add_argument("--no-deps", action="store_true", help=no_deps_help)
     p.set_defaults(func=cmd_test)
 
     p = sub.add_parser("roundtrip", help="импорт -> экспорт во временный каталог -> сравнение с src/ и tests/")
+    p.add_argument("--no-deps", action="store_true", help=no_deps_help)
     p.set_defaults(func=cmd_roundtrip)
+
+    p = sub.add_parser(
+        "library",
+        help="src/ -> библиотека build/<имя>.library (Project Information — config.json: library), установка",
+    )
+    p.add_argument("--install", action="store_true", help="установить в репозиторий библиотек (library_repository)")
+    p.add_argument("--compiled", action="store_true", help="также .compiled-library; с --install ставится она")
+    p.add_argument("--released", action="store_true", help="отметить в Project Information как выпущенную (released)")
+    p.add_argument("--uninstall", action="store_true", help="удалить версию library.version из репозитория библиотек")
+    p.add_argument("--all-versions", action="store_true", help="с --uninstall: удалить все версии этой библиотеки")
+    p.add_argument("--no-deps", action="store_true", help=no_deps_help)
+    p.add_argument("--result", metavar="FILE", help="итог в JSON (его читает cds.py репозитория-потребителя)")
+    p.set_defaults(func=cmd_library)
+
+    p = sub.add_parser("deps", help="библиотеки из config.json: проверка, установка, сборка в соседних репозиториях")
+    p.add_argument("keys", nargs="*", metavar="KEY", help="ключи libraries (по умолчанию — все, на которые ссылаются)")
+    p.add_argument("--rebuild", action="store_true", help="пересобрать и переустановить, даже если версия уже есть")
+    p.add_argument("--check", action="store_true", help="только проверить (код 1, если чего-то нет)")
+    p.set_defaults(func=cmd_deps)
 
     p = sub.add_parser("runtime", help="пользовательский процесс CODESYS Control Win V3")
     p.add_argument("action", choices=("start", "stop", "status", "restart", "init"))

@@ -713,5 +713,5 @@ def test_launcher_help_runs() -> None:
         check=False,
     )
     assert proc.returncode == 0
-    for command in ("import", "export", "build", "test", "roundtrip", "runtime", "junit", "report"):
+    for command in ("import", "export", "build", "test", "roundtrip", "library", "deps", "runtime", "junit", "report"):
         assert command in proc.stdout

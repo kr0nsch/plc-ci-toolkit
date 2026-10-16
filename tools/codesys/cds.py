@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-"""cds.py — импорт, сборка, тесты и экспорт CODESYS из консоли (Python 3.11+).
+"""cds.py — импорт, сборка, тесты, экспорт и библиотеки CODESYS из консоли (Python 3.11+).
 
     python tools/codesys/cds.py import [--tests] | export [--tests] [--to DIR] | build [--tests]
-                                test | roundtrip | runtime start|stop|status|restart|init | junit | report
+                                test | roundtrip | library [--install] [--compiled] | deps [--rebuild]
+                                runtime start|stop|status|restart|init | junit | report
 
 Это запускатель: реализация — tools/codesys/cdshost/cli.py. Файл намеренно написан на общем
 подмножестве Python 2.7 и 3 (как скрипты CODESYS в этом каталоге, см. tools/tests/test_py27_compat.py),

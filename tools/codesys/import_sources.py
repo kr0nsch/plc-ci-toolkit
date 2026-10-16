@@ -18,7 +18,11 @@ CODESYS.exe --noUI --runscript=<этот файл>.
    с ним сборка после замены объявления POU с методами могла видеть старый текст.
 4. Удаляет объекты управляемых видов (POU, DUT, GVL, интерфейсы, методы и свойства POU),
    которых больше нет в исходниках, и опустевшие папки — с записью в отчёт.
-5. Конфигурация задач и ссылки на библиотеки — по режиму (normal/test) из config.json.
+5. Конфигурация задач и ссылки на библиотеки — по режиму (normal/test) из config.json. Библиотеки
+   ищутся в репозиториях CODESYS до открытия проекта (точная версия или новейшая '*'); нет
+   нужной — установка из install_from, иначе отказ со списком missing_libraries (по нему
+   cds.py собирает библиотеки из соседних репозиториев). Ссылка другой версии заменяется,
+   пространство имён ссылки — из config.json, плейсхолдер — с перенаправлением.
 6. Сохраняет проект. Журнал — job["log"] (build/import.log), отчёт — job["report"] (build/import.json).
 """
 from __future__ import absolute_import, print_function, unicode_literals
@@ -538,97 +542,212 @@ def sync_tasks(app, tasks_cfg, log, report):
             report.add('removed', 'TASK %s (нет в config.json для этого режима)' % C.obj_name(existing[key]))
 
 
-def _lib_matches(ml, spec):
-    # type: (Any, Dict[str, Any]) -> bool
-    namespace = spec.get('namespace')
-    if namespace and C._text(ml.default_namespace or '').lower() != namespace.lower():
-        return False
-    version = spec.get('version')
-    if version and C._text(ml.version) != version:
-        return False
-    title = spec.get('title_contains')
-    return not (title and title.lower() not in C._text(ml.title or '').lower())
+def _label(spec):
+    # type: (Dict[str, Any]) -> str
+    return C._text(spec.get('label') or spec.get('key') or spec.get('namespace') or '?')
 
 
-def _ref_matches(ref, spec):
-    # type: (Any, Dict[str, Any]) -> bool
-    try:
-        if ref.is_managed:
-            return _lib_matches(ref.managed_library, spec)
-    except Exception:
-        pass
-    namespace = spec.get('namespace')
-    try:
-        return bool(namespace) and C._text(ref.namespace or '').lower() == namespace.lower()
-    except Exception:
-        return False
+def _pin(spec):
+    # type: (Dict[str, Any]) -> str
+    return C.VERSION_NEWEST if C.is_newest_pin(spec.get('version')) else C._text(spec.get('version'))
 
 
-def find_library(spec, log):
-    # type: (Dict[str, Any], C.Log) -> Any
-    """Библиотека в репозиториях CODESYS; при отсутствии — установка из spec['install_from']."""
-    se = C.api()
-    lm = se.librarymanager
-    best = None
-    for ml in lm.get_all_libraries(True):
-        if _lib_matches(ml, spec):
-            if best is None or C._text(ml.version) > C._text(best.version):
-                best = ml
-    if best is not None:
-        return best
+def install_from_file(spec, repository, log):
+    # type: (Dict[str, Any], Optional[str], C.Log) -> Dict[str, Any]
+    """Установка библиотеки из spec['install_from'] в репозиторий; запись установленной библиотеки."""
     path = spec.get('install_from')
-    label = spec.get('label') or spec.get('namespace')
-    if not path:
+    label = _label(spec)
+    if not path or not os.path.isfile(path):
+        # без этой проверки install_library отвечает непонятным «Не удалось открыть управляемую
+        # библиотеку (Ссылка на объект не указывает на экземпляр объекта)» (проверено на 3.5.17.30)
+        where = spec.get('install_env') or 'config.json'
+        raise C.StepError('файл библиотеки %s не найден: %s (%s)' % (label, path, where), C.EXIT_INTERNAL)
+    repo = C.find_repository(repository)
+    log.info('установка библиотеки %s из %s в репозиторий %s' % (label, path, C._text(repo.name)))
+    rec = C.lib_record(C.api().librarymanager.install_library(path, repo, True))
+    if not (C.lib_matches_identity(rec, spec) and C.version_matches(spec.get('version'), rec['version'])):
         raise C.StepError(
-            'библиотека %s %s не установлена в репозитории CODESYS; задайте путь к .library в %s '
-            '(docs/MANUAL_STEPS.md)' % (label, spec.get('version') or '', spec.get('install_env') or 'config.json')
+            'установленная из %s библиотека %s (пространство имён %s) не соответствует config.json: '
+            'libraries.%s (версия %s)' % (path, rec['displayname'], rec['namespace'], spec.get('key'), _pin(spec))
         )
-    if not os.path.isfile(path):
-        raise C.StepError('файл библиотеки %s не найден: %s' % (label, path))
-    log.info('установка библиотеки %s из %s в репозиторий %s' % (label, path, C._text(lm.repositories[0].name)))
-    best = lm.install_library(path, lm.repositories[0], True)
-    if not _lib_matches(best, spec):
-        raise C.StepError(
-            'установленная библиотека %s (%s, ns %s) не соответствует config.json'
-            % (C._text(best.displayname), C._text(best.version), C._text(best.default_namespace))
-        )
-    return best
+    rec['installed_from'] = path
+    return rec
 
 
-def sync_libraries(app, wanted_specs, other_specs, log, report):
-    # type: (Any, List[Dict[str, Any]], List[Dict[str, Any]], C.Log, Report) -> None
-    libman = None
-    for obj in C.children(app):
+def resolve_libraries(specs, repository, log, install=True):
+    # type: (List[Dict[str, Any]], Optional[str], C.Log, bool) -> List[Tuple[Dict[str, Any], Dict[str, Any]]]
+    """Библиотеки из config.json в репозиториях CODESYS: [(spec, запись установленной библиотеки)].
+
+    Версия — точная или новейшая ('*'). Нет подходящей — установка из install_from (если задан)
+    в репозиторий repository. Найденная библиотека проверяется и по её собственным зависимостям
+    (рекурсивно, C.missing_dependencies): без них CODESYS не соберёт потребителя. Остальные
+    отсутствующие (и библиотеки без своих зависимостей) — одна StepError (код 3) со списком
+    missing_libraries: по нему cds.py собирает библиотеки из соседних репозиториев (build_from_repo;
+    сборка библиотеки там же ставит и её зависимости) и повторяет шаг. Проект при этом не меняется:
+    разрешение идёт до открытия проекта.
+    """
+    if not specs:
+        return []
+    records = C.installed_libraries()
+    resolved = []  # type: List[Tuple[Dict[str, Any], Dict[str, Any]]]
+    missing = []  # type: List[str]
+    keys = []  # type: List[str]
+    for spec in specs:
+        rec = C.pick_library(records, spec)
+        if rec is None and install and spec.get('install_from'):
+            rec = install_from_file(spec, repository, log)
+            records = C.installed_libraries()
+        absent = C.missing_dependencies(rec, records) if rec is not None else []
+        if rec is None or absent:
+            hint = []
+            if rec is None:
+                versions = sorted(set(r['version'] for r in records if C.lib_matches_identity(r, spec)),
+                                  key=lambda v: C.parse_version(v) or (0,))
+                what = ('установлены версии: %s' % ', '.join(versions)) if versions else 'не установлена ни одна версия'
+            else:
+                what = 'установлена %s, но в репозиториях нет её зависимостей: %s' % (rec['displayname'],
+                                                                                     ', '.join(absent))
+            if spec.get('build_from_repo'):
+                hint.append('cds.py deps соберёт её из %s' % spec['build_from_repo'])
+            where = spec.get('install_env') or 'libraries.%s.install_from' % spec.get('key')
+            hint.append('путь к .library — в %s' % where)
+            missing.append('%s %s (%s; %s)' % (_label(spec), _pin(spec), what, '; '.join(hint)))
+            keys.append(C._text(spec.get('key')))
+            continue
+        log.info('библиотека %s %s: %s' % (C._text(spec.get('key') or _label(spec)), _pin(spec), rec['displayname']))
+        resolved.append((spec, rec))
+    if missing:
+        raise C.StepError(
+            'нет библиотек в репозиториях CODESYS: %s (docs/MANUAL_STEPS.md, раздел 7)' % '; '.join(missing),
+            C.EXIT_INTERNAL,
+            data={'missing_libraries': keys},
+        )
+    return resolved
+
+
+def installed_from_files(resolved):
+    # type: (List[Tuple[Dict[str, Any], Dict[str, Any]]]) -> List[str]
+    """Библиотеки, которые resolve_libraries поставил из install_from (их печатает cds.py)."""
+    return ['%s <- %s' % (rec['displayname'], rec['installed_from'])
+            for _, rec in resolved if rec.get('installed_from')]
+
+
+def find_library_manager(container):
+    # type: (Any) -> Any
+    """Library Manager приложения или пула POU библиотеки (создаётся, если его нет)."""
+    for obj in C.children(container):
         try:
             if obj.is_libman:
-                libman = obj
-                break
+                return obj
         except Exception:
             continue
-    if libman is None:
-        libman = app.get_library_manager()
-    refs = list(libman.references)
-    for spec in wanted_specs:
-        label = spec.get('label') or spec.get('namespace')
-        if any(_ref_matches(ref, spec) for ref in refs):
+    return container.get_library_manager()
+
+
+def _find_ref(libman, predicate):
+    # type: (Any, Any) -> Any
+    for ref in libman.references:
+        if predicate(C.ref_record(ref)):
+            return ref
+    return None
+
+
+def _fix_reference(ref, spec):
+    # type: (Any, Dict[str, Any]) -> List[str]
+    """Пространство имён и qualified_only ссылки — как в config.json; список изменений."""
+    changes = []  # type: List[str]
+    namespace = spec.get('namespace')
+    if namespace and C._text(ref.namespace or '') != namespace:
+        ref.namespace = namespace
+        changes.append('namespace=%s' % namespace)
+    qualified = spec.get('qualified_only')
+    if qualified is not None and bool(ref.qualified_only) != bool(qualified):
+        ref.qualified_only = bool(qualified)
+        changes.append('qualified_only=%s' % bool(qualified))
+    return changes
+
+
+def add_reference(libman, spec, rec, want, log):
+    # type: (Any, Dict[str, Any], Dict[str, Any], str, C.Log) -> Any
+    """Добавляет ссылку на библиотеку rec так, как требует spec (проверено на 3.5.17.30).
+
+    - точная версия: add_library(ManagedLib) — ссылка 'T, 1.0.0.0 (C)';
+    - '*': add_library('T, * (C)') — ссылка на новейшую установленную версию;
+    - placeholder: add_placeholder(имя, 'T, <версия|*> (C)'). Своё имя плейсхолдера ни
+      устройство, ни профиль библиотек не разрешают, и разрешение по умолчанию в приложении не
+      работает («Библиотека ... не добавлена в Менеджер библиотек») — тогда ставится
+      перенаправление set_redirection на то же имя. Перенаправление хранится в проекте отдельно
+      от ссылки и переживает её удаление: новый плейсхолдер с тем же именем сразу разрешается
+      старым перенаправлением (другой версией) — поэтому уже перенаправленный плейсхолдер тоже
+      перенаправляется на want. Плейсхолдер, который разрешает профиль (например, Standard), не
+      перенаправляется.
+    """
+    placeholder = spec.get('placeholder')
+    if placeholder:
+        libman.add_placeholder(placeholder, want)
+        ref = _find_ref(libman, lambda r: (r['placeholder'] or '').lower() == placeholder.lower())
+        if ref is None:
+            raise C.StepError('плейсхолдер #%s не появился в Library Manager после add_placeholder' % placeholder)
+        try:
+            redirection = C._text(ref.get_redirection() or '')
+        except Exception:
+            redirection = ''
+        unresolved = not C._attr(ref, 'effective_resolution')
+        if (unresolved or C._attr(ref, 'is_redirected')) and redirection.lower() != want.lower():
+            ref.set_redirection(want)
+            why = 'не разрешается устройством и профилем' if unresolved else 'было перенаправление на %s' % redirection
+            log.info('плейсхолдер #%s %s — перенаправление на %s' % (placeholder, why, want))
+    else:
+        if C.is_newest_pin(spec.get('version')):
+            libman.add_library(want)
+        else:
+            libman.add_library(rec['obj'])
+        ref = _find_ref(libman, lambda r: not r['placeholder'] and r['name'].lower() == want.lower())
+        if ref is None:
+            raise C.StepError('ссылка %s не появилась в Library Manager после add_library' % want)
+    _fix_reference(ref, spec)
+    return ref
+
+
+def sync_libraries(libman, resolved, other_specs, log, report):
+    # type: (Any, List[Tuple[Dict[str, Any], Dict[str, Any]]], List[Dict[str, Any]], C.Log, Report) -> None
+    """Ссылки Library Manager — как в config.json.
+
+    Ссылка на ту же библиотеку другой версии (или другого вида: плейсхолдер / обычная)
+    заменяется; совпадающая остаётся (пространство имён и qualified_only выравниваются);
+    ссылки на библиотеки других режимов удаляются. Прочие ссылки (системные плейсхолдеры
+    устройства, добавленные вручную) не трогаются.
+    """
+    for spec, rec in resolved:
+        label = 'LIBRARY %s' % _label(spec)
+        want = C.spec_reference(spec, rec)
+        mine = [r for r in (C.ref_record(x) for x in libman.references) if C.ref_matches_identity(r, spec)]
+        current = [r for r in mine if C.ref_is_current(r, spec, want)]
+        keep = current[0] if current else None
+        for ref in mine:
+            if ref is keep:
+                continue
+            libman.remove_library(ref['name'])
+            report.add('removed', '%s (%s: заменяется на %s)' % (label, ref['name'], want))
+        if keep is None:
+            add_reference(libman, spec, rec, want, log)
+            prefix = ('#%s -> ' % spec['placeholder']) if spec.get('placeholder') else ''
+            report.add('created', '%s (%s%s)' % (label, prefix, want))
+            continue
+        changes = _fix_reference(keep['obj'], spec)
+        if changes:
+            report.add('updated', '%s (%s)' % (label, ', '.join(changes)))
+        else:
             report.unchanged += 1
-            continue
-        ml = find_library(spec, log)
-        libman.add_library(ml)
-        report.add('created', 'LIBRARY %s (%s)' % (label, C._text(ml.displayname)))
+    wanted_specs = [spec for spec, _ in resolved]
     for spec in other_specs:
-        if any(_lib_matches_spec_equal(spec, w) for w in wanted_specs):
-            continue
-        for ref in refs:
-            if _ref_matches(ref, spec):
-                name = C._text(ref.name)
-                libman.remove_library(name)
-                report.add('removed', 'LIBRARY %s (не нужна в этом режиме)' % name)
-
-
-def _lib_matches_spec_equal(a, b):
-    # type: (Dict[str, Any], Dict[str, Any]) -> bool
-    return (a.get('namespace') or '').lower() == (b.get('namespace') or '').lower()
+        for ref in [C.ref_record(x) for x in libman.references]:
+            if not C.ref_matches_identity(ref, spec):
+                continue
+            if any(C.ref_matches_identity(ref, w) for w in wanted_specs):
+                continue
+            libman.remove_library(ref['name'])
+            report.add('removed', 'LIBRARY %s (не нужна в этом режиме)' % ref['name'])
 
 
 # ---------------------------------------------------------------------------
@@ -661,6 +780,10 @@ def run(ctx, step):
         tests_folder = step.get('tests_folder') or 'Tests'
         log.info('импорт: репозиторий %s, режим %s, тесты %s' % (repo_root, step.get('mode'), with_tests))
         wanted = scan_sources(repo_root, with_tests, tests_folder, log)
+        mode_cfg = step.get('mode_config') or {}
+        # библиотеки — до открытия проекта: если нужной версии нет, проект не меняется, а cds.py
+        # по missing_libraries может собрать её из соседнего репозитория и повторить импорт
+        resolved = resolve_libraries(mode_cfg.get('libraries') or [], step.get('library_repository'), log)
         proj, created = ctx.open_project(
             step['project'],
             create=True,
@@ -686,9 +809,8 @@ def run(ctx, step):
             for i in range(1, len(folder_path) + 1):
                 wanted_paths.add(tuple(p.lower() for p in folder_path[:i]))
         syncer.remove_empty_folders(wanted_paths)
-        mode_cfg = step.get('mode_config') or {}
         sync_tasks(app, mode_cfg.get('tasks') or [], log, report)
-        sync_libraries(app, mode_cfg.get('libraries') or [], step.get('other_libraries') or [], log, report)
+        sync_libraries(find_library_manager(app), resolved, step.get('other_libraries') or [], log, report)
         proj.save()
         log.info(
             'проект сохранён: создано %d, обновлено %d, удалено %d, перемещено %d, без изменений %d'
@@ -702,6 +824,7 @@ def run(ctx, step):
                 'mode': step.get('mode'),
                 'with_tests': with_tests,
                 'objects': len(wanted),
+                'installed_libraries': installed_from_files(resolved),
                 'warnings': log.warnings,
                 'errors': log.errors,
             }

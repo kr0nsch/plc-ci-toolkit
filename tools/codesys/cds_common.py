@@ -340,13 +340,218 @@ class StepError(Exception):
     """Ожидаемая ошибка шага (понятное сообщение без трассировки).
 
     code — код выхода процесса: EXIT_FAILED (проверка не прошла, по умолчанию) или
-    EXIT_INTERNAL (окружение: рантайм недоступен, нет файла и т.п.).
+    EXIT_INTERNAL (окружение: рантайм недоступен, нет файла и т.п.). data — поля, которые
+    попадут в результат шага (например, missing_libraries: по ним cds.py собирает зависимости).
     """
 
-    def __init__(self, message, code=EXIT_FAILED):
-        # type: (str, int) -> None
+    def __init__(self, message, code=EXIT_FAILED, data=None):
+        # type: (str, int, Optional[Dict[str, Any]]) -> None
         Exception.__init__(self, message)
         self.code = code
+        self.data = data or {}
+
+
+# ---------------------------------------------------------------------------
+# Библиотеки: версии, идентичность, имена ссылок (чистые функции — проверяются pytest)
+#
+# Библиотеку в репозитории CODESYS однозначно задаёт тройка «компания, название, версия»
+# (ScriptProjectInfoObject.company/title/version). Ссылка в Library Manager называется
+# «Название, Версия (Компания)»; вместо версии может стоять '*' — новейшая установленная
+# (проверено на 3.5.17.30: add_library('T, * (C)') ссылается на новейшую, при установке
+# более новой версии ссылка переходит на неё). Ссылка-плейсхолдер называется «#Имя».
+# ---------------------------------------------------------------------------
+
+VERSION_NEWEST = '*'
+_VERSION_RE = re.compile(r'^[0-9]+(\.[0-9]+){1,3}$')
+_REF_NAME_RE = re.compile(r'^(?P<title>.+), (?P<version>\*|[0-9]+(?:\.[0-9]+){1,3}) \((?P<company>[^()]*)\)$')
+
+
+def parse_version(text):
+    # type: (Any) -> Optional[Tuple[int, ...]]
+    """'1.2' -> (1, 2, 0, 0), '1.2.3.4' -> (1, 2, 3, 4); не версия (в том числе '*') — None."""
+    if text is None:
+        return None
+    value = ('%s' % (text,)).strip()
+    if not _VERSION_RE.match(value):
+        return None
+    parts = [int(p) for p in value.split('.')]
+    while len(parts) < 4:
+        parts.append(0)
+    return tuple(parts)
+
+
+def is_newest_pin(pin):
+    # type: (Any) -> bool
+    """Закрепление «новейшая установленная»: '*' (или не задано)."""
+    return pin is None or ('%s' % (pin,)).strip() in ('', VERSION_NEWEST)
+
+
+def version_matches(pin, version):
+    # type: (Any, Any) -> bool
+    """Версия библиотеки подходит под закрепление: точное совпадение (1.0 == 1.0.0.0) или '*'."""
+    if parse_version(version) is None:
+        return False
+    if is_newest_pin(pin):
+        return True
+    return parse_version(pin) == parse_version(version)
+
+
+def _low(value):
+    # type: (Any) -> str
+    return ('%s' % (value,)).strip().lower() if value is not None else ''
+
+
+def lib_matches_identity(rec, spec):
+    # type: (Dict[str, Any], Dict[str, Any]) -> bool
+    """Библиотека (запись: title, company, namespace) — та, что описана в config.json?
+
+    Сравниваются title (точно), title_contains (подстрока) и company (точно), без учёта регистра.
+    Если ничего из этого не задано — по пространству имён по умолчанию (namespace).
+    Пространство имён в остальных случаях идентичность не определяет: его можно переопределить
+    в ссылке проекта.
+    """
+    title = _low(rec.get('title'))
+    named = False
+    if spec.get('title'):
+        named = True
+        if title != _low(spec['title']):
+            return False
+    if spec.get('title_contains'):
+        named = True
+        if _low(spec['title_contains']) not in title:
+            return False
+    if spec.get('company'):
+        named = True
+        if _low(rec.get('company')) != _low(spec['company']):
+            return False
+    if named:
+        return True
+    namespace = _low(spec.get('namespace'))
+    return bool(namespace) and _low(rec.get('namespace')) == namespace
+
+
+def pick_library(records, spec):
+    # type: (List[Dict[str, Any]], Dict[str, Any]) -> Optional[Dict[str, Any]]
+    """Библиотека для spec из установленных: точная версия или новейшая ('*'); нет — None.
+
+    Если под описание подходят разные библиотеки (разные название или компания) — StepError:
+    уточните title/company в config.json.
+    """
+    pin = spec.get('version')
+    found = [r for r in records if lib_matches_identity(r, spec) and version_matches(pin, r.get('version'))]
+    if not found:
+        return None
+    identities = sorted(set((_low(r.get('title')), _low(r.get('company'))) for r in found))
+    if len(identities) > 1:
+        names = ', '.join('%s (%s)' % pair for pair in identities)
+        raise StepError(
+            'библиотека %s: под описание подходят разные библиотеки: %s — уточните title/company в config.json'
+            % (spec.get('key') or spec.get('label') or '?', names)
+        )
+    return max(found, key=lambda r: parse_version(r.get('version')) or (0,))
+
+
+def reference_name(title, version, company):
+    # type: (Any, Any, Any) -> str
+    """Имя ссылки в Library Manager: 'Название, 1.0.0.0 (Компания)' или 'Название, * (Компания)'."""
+    return '%s, %s (%s)' % (_text(title), _text(version), _text(company))
+
+
+def spec_reference(spec, rec):
+    # type: (Dict[str, Any], Dict[str, Any]) -> str
+    """Имя ссылки для spec на найденную библиотеку: при '*' — новейшая, иначе точная версия."""
+    version = VERSION_NEWEST if is_newest_pin(spec.get('version')) else rec.get('version')
+    return reference_name(rec.get('title'), version, rec.get('company'))
+
+
+def parse_reference_name(name):
+    # type: (Any) -> Optional[Dict[str, str]]
+    """'Название, 1.0.0.0 (Компания)' -> {'title', 'version', 'company'}; иначе None."""
+    if not name:
+        return None
+    match = _REF_NAME_RE.match(_text(name).strip())
+    if match is None:
+        return None
+    return {'title': match.group('title'), 'version': match.group('version'), 'company': match.group('company')}
+
+
+def ref_matches_identity(ref, spec):
+    # type: (Dict[str, Any], Dict[str, Any]) -> bool
+    """Ссылка проекта (запись ref_record) относится к библиотеке spec (любой версии)?"""
+    placeholder = _low(spec.get('placeholder'))
+    if placeholder and _low(ref.get('placeholder')) == placeholder:
+        return True
+    for key in ('library', 'resolution'):
+        rec = ref.get(key)
+        if rec and lib_matches_identity(dict(rec, namespace=ref.get('namespace')), spec):
+            return True
+    return False
+
+
+def ref_is_current(ref, spec, want):
+    # type: (Dict[str, Any], Dict[str, Any], str) -> bool
+    """Ссылка уже такая, какой её требует spec: вид (плейсхолдер или нет) и имя разрешения want."""
+    placeholder = _low(spec.get('placeholder'))
+    if placeholder:
+        return _low(ref.get('placeholder')) == placeholder and _low(ref.get('target')) == _low(want)
+    return not ref.get('placeholder') and _low(ref.get('name')) == _low(want)
+
+
+def missing_dependencies(rec, records):
+    # type: (Dict[str, Any], List[Dict[str, Any]]) -> List[str]
+    """Зависимости библиотеки rec (рекурсивно), которых нет среди установленных records.
+
+    Зависимости — rec['dependencies'] (ManagedLib.dependencies, проверено на 3.5.17.30): имена
+    ссылок самой библиотеки, '#Standard', 'plc-process-lib, 1.0.0.0 (plc-portfolio)', 'Base Interfaces, *
+    (System)'. Ссылку с точной версией CODESYS разрешает только этой версией: другая установленная
+    версия не подходит, и сборка потребителя падает («Библиотека ... не добавлена в Менеджер
+    библиотек», проверено на 3.5.17.30). '*' — любая установленная версия. Плейсхолдеры ('#...')
+    не проверяются: их разрешают устройство и профиль библиотек потребителя.
+    Результат — строки 'зависимость (нужна для библиотека)'.
+    """
+    missing = []  # type: List[str]
+    seen = set()
+    queue = [rec]
+    while queue:
+        current = queue.pop(0)
+        for dep in current.get('dependencies') or []:
+            parsed = parse_reference_name(dep)
+            if parsed is None:
+                continue
+            key = (_low(parsed['title']), _low(parsed['company']), parse_version(parsed['version']))
+            if key in seen:
+                continue
+            seen.add(key)
+            spec = {'title': parsed['title'], 'company': parsed['company'], 'version': parsed['version']}
+            found = pick_library(records, spec)
+            if found is None:
+                missing.append('%s (нужна для %s)' % (_text(dep).strip(), current.get('displayname') or '?'))
+            else:
+                queue.append(found)
+    return missing
+
+
+def library_problems(info):
+    # type: (Dict[str, Any]) -> List[str]
+    """Проверка Project Information библиотеки (config.json: library) — список замечаний."""
+    problems = []  # type: List[str]
+    for key in ('title', 'company'):
+        value = info.get(key)
+        if not value or not ('%s' % (value,)).strip():
+            problems.append('не задано library.%s' % key)
+        elif re.search(r'[<>:"/\\|?*,()]', '%s' % (value,)):
+            problems.append('library.%s = %r: символы <>:"/\\|?*,() недопустимы (это имя каталога в репозитории '
+                            'библиотек и часть имени ссылки)' % (key, value))
+    if parse_version(info.get('version')) is None:
+        problems.append('library.version = %r: нужна версия из 2-4 чисел через точку (1.0.0.0)'
+                        % (info.get('version'),))
+    namespace = info.get('default_namespace')
+    if not namespace or not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', '%s' % (namespace,)):
+        problems.append('library.default_namespace = %r: нужен идентификатор ST' % (namespace,))
+    placeholder = info.get('placeholder')
+    if placeholder and re.search(r'[<>:"/\\|?*,()#]', '%s' % (placeholder,)):
+        problems.append('library.placeholder = %r: недопустимые символы' % (placeholder,))
+    return problems
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +661,92 @@ def find_child(parent, name, kinds=None):
     return None
 
 
+def _attr(obj, name):
+    # type: (Any, str) -> Any
+    try:
+        return getattr(obj, name)
+    except Exception:
+        return None
+
+
+def lib_record(ml):
+    # type: (Any) -> Dict[str, Any]
+    """Запись о библиотеке репозитория (ManagedLib) для чистых функций; сам объект — в 'obj'."""
+    try:
+        dependencies = [_text(d) for d in (_attr(ml, 'dependencies') or [])]
+    except Exception:
+        dependencies = []
+    return {
+        'title': _text(_attr(ml, 'title') or ''),
+        'company': _text(_attr(ml, 'company') or ''),
+        'version': _text(_attr(ml, 'version') or ''),
+        'namespace': _text(_attr(ml, 'default_namespace') or ''),
+        'displayname': _text(_attr(ml, 'displayname') or ''),
+        'dependencies': dependencies,
+        'obj': ml,
+    }
+
+
+def ref_record(ref):
+    # type: (Any) -> Dict[str, Any]
+    """Запись о ссылке Library Manager: имя, плейсхолдер, разрешение, пространство имён.
+
+    target — во что разрешается ссылка по замыслу проекта: имя управляемой ссылки
+    ('T, 1.0.0.0 (C)', 'T, * (C)'); у плейсхолдера — перенаправление (get_redirection
+    возвращает то, что задано, в том числе '*'), без него — разрешение по умолчанию, если
+    плейсхолдер разрешается (устройством или профилем), и '' — если не разрешается.
+    """
+    name = _text(_attr(ref, 'name') or '')
+    rec = {'name': name, 'namespace': _text(_attr(ref, 'namespace') or ''), 'placeholder': None,
+           'target': name, 'library': None, 'resolution': None, 'obj': ref}  # type: Dict[str, Any]
+    if _attr(ref, 'is_placeholder'):
+        rec['placeholder'] = _text(_attr(ref, 'placeholder_name') or name.lstrip('#'))
+        redirection = None
+        try:
+            redirection = ref.get_redirection()
+        except Exception:
+            pass
+        effective = _attr(ref, 'effective_resolution')
+        if redirection:
+            rec['target'] = _text(redirection)
+        elif effective:
+            rec['target'] = _text(_attr(ref, 'default_resolution') or '')
+        else:
+            rec['target'] = ''
+        rec['resolution'] = parse_reference_name(effective or rec['target'])
+    else:
+        rec['resolution'] = parse_reference_name(name)
+        if _attr(ref, 'is_managed'):
+            managed = _attr(ref, 'managed_library')
+            if managed is not None:
+                rec['library'] = lib_record(managed)
+    return rec
+
+
+def installed_libraries():
+    # type: () -> List[Dict[str, Any]]
+    """Все библиотеки репозиториев CODESYS (без «затенённых» одноимённых из нижних репозиториев)."""
+    return [lib_record(ml) for ml in api().librarymanager.get_all_libraries(True)]
+
+
+def find_repository(name):
+    # type: (Optional[str]) -> Any
+    """Репозиторий библиотек по имени (config.json: library.repository); пусто — первый."""
+    repos = list(api().librarymanager.repositories)
+    if not repos:
+        raise StepError('в CODESYS нет ни одного репозитория библиотек', EXIT_INTERNAL)
+    if not name:
+        return repos[0]
+    for repo in repos:
+        if _text(repo.name).lower() == _text(name).lower():
+            return repo
+    raise StepError(
+        'репозиторий библиотек %s не найден; есть: %s (config.json: library.repository, CDS_LIBRARY_REPOSITORY)'
+        % (name, ', '.join('%s (%s)' % (_text(r.name), _text(r.root_folder)) for r in repos)),
+        EXIT_INTERNAL,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Контекст задания и диспетчер шагов
 # ---------------------------------------------------------------------------
@@ -465,6 +756,9 @@ ACTION_MODULES = {
     'export': 'export_sources',
     'build': 'build',
     'test': 'run_tests',
+    'library': 'make_library',
+    'deps': 'library_repo',
+    'uninstall': 'library_repo',
 }
 
 
@@ -475,14 +769,16 @@ def _norm_path(path):
 
 def precompile_cache_paths(project_path):
     # type: (str) -> List[str]
-    """Файлы кэша предкомпиляции CODESYS рядом с проектом: <имя>_project.precompilecache.
+    """Файлы кэша предкомпиляции CODESYS рядом с проектом: <имя>_<расширение>.precompilecache.
 
-    Имя проверено на 3.5.17.30 (plcrev.project -> plcrev_project.precompilecache); второй
-    вариант (все точки имени файла -> '_') — на случай имени проекта с точками.
+    Имя проверено на 3.5.17.30: plcrev.project -> plcrev_project.precompilecache,
+    demo.library -> demo_library.precompilecache; второй вариант (все точки имени файла -> '_') —
+    на случай имени с точками. Кэш проекта <имя>.project и библиотеки <имя>.library — разные файлы.
     """
     folder, name = os.path.split(os.path.abspath(project_path))
-    stem = os.path.splitext(name)[0]
-    names = [stem + '_project.precompilecache', name.replace('.', '_') + '.precompilecache']
+    stem, ext = os.path.splitext(name)
+    names = [stem + '_' + (ext.lstrip('.') or 'project') + '.precompilecache',
+             name.replace('.', '_') + '.precompilecache']
     paths = []  # type: List[str]
     for item in names:
         path = os.path.join(folder, item)
@@ -744,6 +1040,7 @@ def run_main(entry_action):
                 module = __import__(ACTION_MODULES[action])
                 step_result.update(module.run(ctx, step) or {})
             except StepError as exc:
+                step_result.update(getattr(exc, 'data', None) or {})
                 step_result['ok'] = False
                 step_result['error'] = _text(exc)
                 step_result['exit_code'] = getattr(exc, 'code', EXIT_FAILED)
