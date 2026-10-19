@@ -4,7 +4,7 @@
 //             PRG_Tests каждый цикл после coUnit.RUN(). Читает внутренние переменные
 //             раннера coUnit 1.2.0.0 (проверено в CODESYS 3.5.17.30): при смене версии
 //             coUnit проверить пути GVL_coUnit.coUnitRunner.TestResults.
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/cfunit_results.md
 FUNCTION_BLOCK FB_TestResultsCollector

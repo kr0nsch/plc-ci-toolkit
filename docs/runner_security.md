@@ -59,7 +59,7 @@ Windows-job запускается **только** по `push` в `main` и п�
          (github.event_name == 'push' &&
            (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
        )
-     uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+     uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
    ```
 
    В самом plc-ci-toolkit задание CODESYS вынесено в отдельный workflow

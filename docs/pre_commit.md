@@ -73,7 +73,7 @@
 ОШИБКА: build/plc-process-lib.project: проект сохранён в IDE после последнего cds.py import/export — правки не выгружены в src/.
   Чтобы сохранить правки, выполните python tools/codesys/cds.py export и добавьте изменения src/ в коммит (git status).
   Правки из IDE не нужны — python tools/codesys/cds.py import --force (проект пересоберётся из src/).
-codesys-sources-exported: коммит остановлен, ошибок: 1. Описание проверки — https://github.com/<GITHUB_USER>/plc-ci-toolkit/blob/main/docs/pre_commit.md
+codesys-sources-exported: коммит остановлен, ошибок: 1. Описание проверки — https://github.com/kr0nsch/plc-ci-toolkit/blob/main/docs/pre_commit.md
 ```
 
 Параметры хука (`args:` в `.pre-commit-config.yaml`): `--allow-unknown` — проект без записи `cds.py`

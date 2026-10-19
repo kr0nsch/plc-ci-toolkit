@@ -7,8 +7,11 @@
 
 ## [Unreleased]
 
-Первый выпуск plc-ci-toolkit. Репозиторий создан из шаблона plc-repo-template: записи про `tools/`,
-`src/` и `tests/` — история шаблона (здесь эти файлы — тестовый стенд workflow и не меняются).
+## [1.0.0] - 2026-10-19
+
+Первый выпуск plc-ci-toolkit (теги `v1.0.0` и `v1`). Репозиторий создан из шаблона
+plc-repo-template: записи про `tools/`, `src/` и `tests/` — история шаблона (здесь эти файлы —
+тестовый стенд workflow и не меняются).
 
 ### Added
 
@@ -100,3 +103,6 @@
   неудачный вход в рантайм — одна строка с причиной и код 3 вместо трассировки; имя пользователя
   рантайма не пишется в журнал.
 - `docs/MANUAL_STEPS.md`, `README.md`: команды без `& rem` — работают в cmd, PowerShell и Git Bash.
+
+[Unreleased]: https://github.com/kr0nsch/plc-ci-toolkit/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kr0nsch/plc-ci-toolkit/releases/tag/v1.0.0

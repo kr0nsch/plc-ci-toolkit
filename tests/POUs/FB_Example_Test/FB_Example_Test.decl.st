@@ -4,7 +4,7 @@
 //             OutOfService, режим по умолчанию, ограничение параметров, счётчик включений
 //             и сброс через I_Resettable. Каждый тест работает со своим экземпляром FB_Example
 //             (локальная переменная метода) и укладывается в один цикл.
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/TEST_REPORT.md
 FUNCTION_BLOCK FB_Example_Test EXTENDS coUnit.FB_TestSuite

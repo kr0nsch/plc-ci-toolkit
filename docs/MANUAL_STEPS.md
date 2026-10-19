@@ -253,9 +253,11 @@ Windows-job — задание `codesys` переиспользуемого work
 
 В каждом репозитории с Windows-job, до регистрации раннера. Settings → Actions → General:
 
-1. **Actions permissions** — «Allow <GITHUB_USER>, and select non-<GITHUB_USER>, actions and
-   reusable workflows»: отметить «Allow actions created by GitHub» и добавить в список
-   `mikepenz/action-junit-report@*`. Переиспользуемые workflow plc-ci-toolkit — свои, они разрешены.
+1. **Actions permissions** — «Allow <владелец>, and select non-<владелец>, actions and
+   reusable workflows» (в репозиториях портфолио — «Allow kr0nsch, and select non-kr0nsch, ...»):
+   отметить «Allow actions created by GitHub» и добавить в список `mikepenz/action-junit-report@*`.
+   Переиспользуемые workflow plc-ci-toolkit у того же владельца разрешены; в репозитории другого
+   владельца добавить и их ([USAGE.md, раздел 1](USAGE.md#1-за-10-минут-проверки-без-codesys), шаг 7).
 2. **Approval for running fork pull request workflows from contributors** — «Require approval for
    all external contributors».
 3. **Workflow permissions** — права только на чтение (`contents` и `packages`); флажок «Allow GitHub
@@ -300,7 +302,7 @@ Windows-job — задание `codesys` переиспользуемого work
    час; не сохраняйте и не пересылайте его):
 
    ```powershell
-   .\config.cmd --url https://github.com/<GITHUB_USER>/plc-ci-toolkit --token <токен> --name codesys-01 --labels codesys --work _work
+   .\config.cmd --url https://github.com/kr0nsch/plc-ci-toolkit --token <токен> --name codesys-01 --labels codesys --work _work
    ```
 
    На вопрос «Would you like to run the runner as service? (Y/N)» ответьте **N**: первый прогон —
@@ -368,7 +370,7 @@ Windows-job — задание `codesys` переиспользуемого work
 Записать:
 
 1. В [TEST_REPORT.md](TEST_REPORT.md) — раздел «Windows-job на self-hosted раннере»: ссылка на
-   запуск (`https://github.com/<GITHUB_USER>/<репозиторий>/actions/runs/<id>`), дата, имя раннера,
+   запуск (`https://github.com/kr0nsch/<репозиторий>/actions/runs/<id>`), дата, имя раннера,
    CODESYS 3.5.17.30, число тестов. Раздел «Последний прогон в CODESYS» можно обновить по
    результатам CI: скачать артефакт и выполнить
    `python tools/codesys/cds.py report --results <каталог артефакта>\test-results.json`.
@@ -494,7 +496,7 @@ StaticAnalysisManager отличается от 3.5.17.30» (другая вер
   в README на динамическую:
 
   ```markdown
-  [![CODESYS](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/codesys.yml/badge.svg?branch=main)](https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/codesys.yml)
+  [![CODESYS](https://github.com/kr0nsch/plc-ci-toolkit/actions/workflows/codesys.yml/badge.svg?branch=main)](https://github.com/kr0nsch/plc-ci-toolkit/actions/workflows/codesys.yml)
   ```
 
 Бейджи репозитория-потребителя — [USAGE.md, раздел 7](USAGE.md#7-бейджи).

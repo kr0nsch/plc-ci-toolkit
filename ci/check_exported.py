@@ -48,7 +48,7 @@ LOCK_SUFFIX = ".~u"
 CODESYS_BINARY_SUFFIXES = (".project", ".projectarchive", ".library", ".compiled-library")
 CDS = "python tools/codesys/cds.py"
 EXPORT_CHECK_DIR = "build/export-check"
-DOCS_URL = "https://github.com/<GITHUB_USER>/plc-ci-toolkit/blob/main/docs/pre_commit.md"
+DOCS_URL = "https://github.com/kr0nsch/plc-ci-toolkit/blob/main/docs/pre_commit.md"
 
 MODE_NORMAL = "normal"
 MODE_TESTS = "tests"

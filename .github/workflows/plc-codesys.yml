@@ -7,7 +7,7 @@
 #     codesys:
 #       needs: static
 #       if: ...  # PLC_CODESYS_RUNNER и список разрешённых событий — examples/consumer-ci.yml
-#       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+#       uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
 #
 # Политика запуска: только push в main и теги, workflow_dispatch и schedule — никогда pull_request
 # и pull_request_target (PR из форка выполнил бы свой код на машине с CODESYS) и не в форках.

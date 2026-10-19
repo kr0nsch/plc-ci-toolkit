@@ -1,7 +1,7 @@
 # Подключение plc-ci-toolkit к своему репозиторию
 
 plc-ci-toolkit даёт два переиспользуемых workflow GitHub Actions для ПЛК-репозиториев на шаблоне
-plc-repo-template (`<TEMPLATE_REPO_URL>`):
+[plc-repo-template](https://github.com/kr0nsch/plc-repo-template):
 
 | Workflow | Где выполняется | Что делает |
 |---|---|---|
@@ -56,23 +56,22 @@ flowchart LR
 
    ```bash
    mkdir -p .github/workflows
-   curl -fsSL https://raw.githubusercontent.com/<GITHUB_USER>/plc-ci-toolkit/v1/examples/consumer-ci.yml \
+   curl -fsSL https://raw.githubusercontent.com/kr0nsch/plc-ci-toolkit/v1/examples/consumer-ci.yml \
      -o .github/workflows/plc-ci.yml
    ```
 
    В PowerShell — `Invoke-WebRequest <тот же URL> -OutFile .github/workflows/plc-ci.yml`; можно и
    просто скопировать файл из этого репозитория.
 
-4. **Подставьте владельца plc-ci-toolkit** вместо плейсхолдера в двух строках `uses:` (если файл
-   скачан из репозитория, где плейсхолдеры уже заменены, этот шаг не нужен):
+4. **Проверьте ссылки `uses:`** — обе указывают на `kr0nsch/plc-ci-toolkit` и тег `@v1`:
 
    ```bash
-   sed -i 's/<GITHUB_USER>/имя-владельца/g' .github/workflows/plc-ci.yml
    grep -n "uses:" .github/workflows/plc-ci.yml
    ```
 
-   Ожидается `uses: имя-владельца/plc-ci-toolkit/.github/workflows/plc-static.yml@v1` и такая же
-   строка для `plc-codesys.yml`.
+   Ожидается `uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-static.yml@v1` и такая же
+   строка для `plc-codesys.yml`. Для своего форка plc-ci-toolkit замените владельца:
+   `sed -i 's#kr0nsch/plc-ci-toolkit#имя-владельца/plc-ci-toolkit#g' .github/workflows/plc-ci.yml`.
 
 5. **Уберите CI шаблона.** В репозитории из шаблона уже есть `.github/workflows/ci.yml` с теми же
    проверками (ruff, pytest, `st_lint`, iec_checker, RuSTy): задание `static` его заменяет, а вместе
@@ -105,9 +104,9 @@ flowchart LR
    - «Approval for running fork pull request workflows from contributors» — **Require approval for
      all external contributors**;
    - если включён список разрешённых actions — добавить `mikepenz/action-junit-report@*`
-     (остальные — `actions/*` от GitHub); если plc-ci-toolkit принадлежит другому владельцу, чем
-     ваш репозиторий, — ещё `<владелец>/plc-ci-toolkit/.github/workflows/plc-static.yml@*` и
-     `<владелец>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@*` (переиспользуемые workflow
+     (остальные — `actions/*` от GitHub); если ваш репозиторий принадлежит не владельцу
+     plc-ci-toolkit, — ещё `kr0nsch/plc-ci-toolkit/.github/workflows/plc-static.yml@*` и
+     `kr0nsch/plc-ci-toolkit/.github/workflows/plc-codesys.yml@*` (переиспользуемые workflow
      проверяются тем же списком).
 
 8. **Бейдж в README** — раздел 7.
@@ -188,7 +187,7 @@ flowchart LR
 
 ```yaml
   static:
-    uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
+    uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
     with:
       iec-checker: docker
       fail-on-iec-checker: false
@@ -288,7 +287,7 @@ push и ручного запуска группа своя (`github.run_id`).
 |---|---|
 | `static`: «нет файла requirements-dev.txt» | файл другой — вход `requirements`; Python-проверки не нужны — `python-checks: false` |
 | `static`: iec_checker — ParserError | конструкция, которую не разбирает iec_checker v0.4 ([tools/README.md](../tools/README.md#понижение-для-iec_checker---flavor-iec-checker)); переписать или `iec-checker: off` |
-| `static`: «в выгрузке plc-ci-toolkit нет ci/summary.py», `codesys`: «No ci/runner_check.py in the plc-ci-toolkit checkout» | выгрузилась не та версия скриптов (например, `toolkit-ref` указывает на старый коммит): задайте `toolkit-repository: <владелец>/plc-ci-toolkit` и `toolkit-ref: v1` или уберите эти входы |
+| `static`: «в выгрузке plc-ci-toolkit нет ci/summary.py», `codesys`: «No ci/runner_check.py in the plc-ci-toolkit checkout» | выгрузилась не та версия скриптов (например, `toolkit-ref` указывает на старый коммит): задайте `toolkit-repository: kr0nsch/plc-ci-toolkit` и `toolkit-ref: v1` или уберите эти входы |
 | `codesys` не запускается | нет переменной `PLC_CODESYS_RUNNER=true`, событие не из таблицы раздела 3 или запуск не из `main` |
 | `guard`: «событие … запрещено» | вызывающий workflow вызывает `plc-codesys.yml` для pull request — исправить условие `if:` по примеру |
 | остальное на раннере | [MANUAL_STEPS.md, раздел 14](MANUAL_STEPS.md#14-если-windows-job-не-прошёл) |

@@ -217,7 +217,7 @@
     },
     "default_namespace": "TPL",
     "placeholder": null,
-    "author": "<ИМЯ ФАМИЛИЯ>",
+    "author": "kr0nsch",
     "description": "plc-ci-toolkit: объекты src/ в виде библиотеки CODESYS",
     "released": false,
     "exclude": [

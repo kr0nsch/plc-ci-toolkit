@@ -5,7 +5,7 @@
 #   python -m pre_commit install
 # Проверить все файлы вручную: python -m pre_commit run --all-files
 # Описание хуков, сообщений и ограничений:
-#   https://github.com/<GITHUB_USER>/plc-ci-toolkit/blob/main/docs/pre_commit.md
+#   https://github.com/kr0nsch/plc-ci-toolkit/blob/main/docs/pre_commit.md
 #
 # Версии — те же, что в CI: ruff — как в requirements-dev.txt шаблона (ruff==0.17.1), st_lint и
 # cds.py — из tools/ вашего репозитория, проверка «исходники выгружены» — из релиза plc-ci-toolkit.
@@ -32,7 +32,7 @@ repos:
   # и .library в коммите нет. CODESYS для проверки не нужен.
   # rev — точный тег выпуска v1.x.y (до первого выпуска — SHA коммита main), не плавающий v1:
   # pre-commit хранит копию хука по значению rev. Обновление — python -m pre_commit autoupdate.
-  - repo: https://github.com/<GITHUB_USER>/plc-ci-toolkit
+  - repo: https://github.com/kr0nsch/plc-ci-toolkit
     rev: v1.0.0
     hooks:
       - id: codesys-sources-exported

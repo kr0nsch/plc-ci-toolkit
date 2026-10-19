@@ -277,7 +277,7 @@ python tools/check/st_lint.py [пути...] [--root R] [--config FILE | --no-con
 
 ```
 // Назначение: что делает POU и в каких режимах
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/ARCHITECTURE.md, раздел «...»
 FUNCTION_BLOCK FB_Example

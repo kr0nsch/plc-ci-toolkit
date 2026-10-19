@@ -1,5 +1,5 @@
 // Назначение: состояние примера FB_Example для HMI/SCADA.
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/ARCHITECTURE.md, раздел «Пример в src/»
 TYPE ST_ExampleSts :

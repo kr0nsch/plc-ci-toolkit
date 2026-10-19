@@ -4,7 +4,7 @@
 
 [project]
 name = "plc-ci-toolkit"
-version = "0.1.0"
+version = "1.0.0"
 description = "CI для ПЛК-репозиториев на CODESYS: проверки, переиспользуемые workflow, хуки pre-commit"
 requires-python = ">=3.11"
 

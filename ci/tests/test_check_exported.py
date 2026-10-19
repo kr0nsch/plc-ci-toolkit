@@ -358,4 +358,4 @@ def test_pre_commit_configs_follow_ci_versions() -> None:
         assert "tools/check/st_lint.py --strict" in text, rel
         assert f"id: {ce.HOOK_ID}" in text, rel
     consumer = (REPO_ROOT / "examples/consumer/.pre-commit-config.yaml").read_text(encoding="utf-8")
-    assert "repo: https://github.com/<GITHUB_USER>/plc-ci-toolkit" in consumer
+    assert "repo: https://github.com/kr0nsch/plc-ci-toolkit" in consumer

@@ -2,7 +2,7 @@
 //             (read_value), HMI, OPC UA и окна наблюдения IDE. Заполняет
 //             FB_TestResultsCollector один раз, когда coUnit сохранил итоги. Обёртка
 //             необязательна: cds.py test читает результаты из coUnit напрямую.
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/cfunit_results.md
 {attribute 'qualified_only'}

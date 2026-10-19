@@ -1,6 +1,6 @@
 // Назначение: подробности упавшего теста coUnit (CfUnit) — набор, тест и сообщение
 //             первой упавшей проверки. Элемент массива GVL_TestResults.aFailures.
-// Автор:      <ИМЯ ФАМИЛИЯ>
+// Автор:      kr0nsch
 // Версия:     0.1.0
 // Документ:   docs/cfunit_results.md
 TYPE ST_TestFailure :

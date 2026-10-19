@@ -4,7 +4,7 @@
 #
 #   jobs:
 #     static:
-#       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
+#       uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
 #
 # Шаги: ruff, ruff format --check, mypy, pytest -> assemble -> st_lint --strict -> iec_checker
 # (бинарник v0.4, закреплённый по размеру и SHA-256, или образ nightly по дайджесту) -> RuSTy

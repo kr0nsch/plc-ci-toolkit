@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/<GITHUB_USER>/plc-ci-toolkit/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1B2736"></a>
+  <a href="https://github.com/kr0nsch/plc-ci-toolkit/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kr0nsch/plc-ci-toolkit/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="docs/MANUAL_STEPS.md#12-первый-прогон-windows-job"><img alt="CODESYS job: ожидает первого прогона на раннере" src="https://img.shields.io/badge/CODESYS%20job-pending%20first%20run-56677D?style=flat-square&labelColor=1B2736"></a>
   <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-56677D?style=flat-square&labelColor=1B2736"></a>
   <img alt="CODESYS 3.5.17.30" src="https://img.shields.io/badge/CODESYS-3.5.17.30-C2410C?style=flat-square&labelColor=1B2736">
@@ -28,11 +28,11 @@
 </p>
 
 CI для ПЛК-кода на CODESYS V3.5: два переиспользуемых workflow GitHub Actions для репозиториев на
-шаблоне plc-repo-template (`<TEMPLATE_REPO_URL>`). Проверки без CODESYS — линтеры, статанализ,
-проверка компиляции — идут на каждый push и pull request на GitHub-hosted Linux; полная сборка в
-CODESYS 3.5.17.30, загрузка в CODESYS Control Win V3 и тесты coUnit (CfUnit) с JUnit-отчётом — на
-своём Windows-раннере, только для `main`, тегов и ручного запуска. Подключение к своему репозиторию —
-один файл workflow, 30 строк без комментариев.
+шаблоне [plc-repo-template](https://github.com/kr0nsch/plc-repo-template). Проверки без CODESYS —
+линтеры, статанализ, проверка компиляции — идут на каждый push и pull request на GitHub-hosted
+Linux; полная сборка в CODESYS 3.5.17.30, загрузка в CODESYS Control Win V3 и тесты coUnit (CfUnit)
+с JUnit-отчётом — на своём Windows-раннере, только для `main`, тегов и ручного запуска. Подключение
+к своему репозиторию — один файл workflow, 30 строк без комментариев.
 
 ## Демонстрация
 
@@ -148,19 +148,19 @@ flowchart LR
    ```
 
 2. **Вызывающий workflow** — копия [examples/consumer-ci.yml](examples/consumer-ci.yml) в
-   `.github/workflows/plc-ci.yml`; в двух строках `uses:` — владелец plc-ci-toolkit вместо
-   `<GITHUB_USER>`. Главное в нём:
+   `.github/workflows/plc-ci.yml`; обе строки `uses:` уже ссылаются на `kr0nsch/plc-ci-toolkit`
+   и тег `@v1` (для своего форка — замените владельца). Главное в нём:
 
    ```yaml
    jobs:
      static:
-       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
+       uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-static.yml@v1
      codesys:
        needs: static
        if: >-
          vars.PLC_CODESYS_RUNNER == 'true' && (github.event_name == 'workflow_dispatch' ||
          (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))))
-       uses: <GITHUB_USER>/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
+       uses: kr0nsch/plc-ci-toolkit/.github/workflows/plc-codesys.yml@v1
    ```
 
 3. **CI шаблона** `.github/workflows/ci.yml` — удалить (`plc-ci.yml` делает те же проверки и больше)
@@ -332,13 +332,13 @@ with real CODESYS; the first GitHub run is pending. Docs are in Russian.
 
 ## Лицензия
 
-[MIT](LICENSE) © 2026 <ИМЯ ФАМИЛИЯ>
+[MIT](LICENSE) © 2026 kr0nsch
 
 ---
 
 <p align="center"><b>Портфолио АСУ ТП</b></p>
 <table>
-<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-repo-template">01 · plc-repo-template</a><br><sub>ST в git, сборка проекта скриптом, CI</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-process-lib">02 · plc-process-lib</a><br><sub>ФБ: AI, двигатель, ПЧ, задвижка, ПИД, тревоги</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/kns-pump-station">03 · kns-pump-station</a><br><sub>флагман: КНС, три насоса с ПЧ, модель, HMI</sub></td></tr>
-<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/kns-port-domestic">04 · kns-port-domestic</a><br><sub>перенос на Astra.IDE / MasterSCADA 4D</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-iiot-stack">05 · plc-iiot-stack</a><br><sub>OPC UA / MQTT → InfluxDB → Grafana</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/iolistgen">06 · iolistgen</a><br><sub>перечень сигналов → ST, карты Modbus, SCADA</sub></td></tr>
-<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-ci-toolkit"><b>07 · plc-ci-toolkit</b></a><br><sub>линтеры, сборка CODESYS, тесты, JUnit</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/s7-to-codesys">08 · s7-to-codesys</a><br><sub>конвертер SCL → ST с отчётом о переносе</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/sis-interlock-demo">09 · sis-interlock-demo</a><br><sub>ПАЗ: MooN, матрица причин и следствий</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/kr0nsch/plc-repo-template">01 · plc-repo-template</a><br><sub>ST в git, сборка проекта скриптом, CI</sub></td><td width="33%"><a href="https://github.com/kr0nsch/plc-process-lib">02 · plc-process-lib</a><br><sub>ФБ: AI, двигатель, ПЧ, задвижка, ПИД, тревоги</sub></td><td width="33%"><span data-repo="kns-pump-station">03 · kns-pump-station</span> <sub>(готовится)</sub><br><sub>флагман: КНС, три насоса с ПЧ, модель, HMI</sub></td></tr>
+<tr><td width="33%"><span data-repo="kns-port-domestic">04 · kns-port-domestic</span> <sub>(готовится)</sub><br><sub>перенос на Astra.IDE / MasterSCADA 4D</sub></td><td width="33%"><span data-repo="plc-iiot-stack">05 · plc-iiot-stack</span> <sub>(готовится)</sub><br><sub>OPC UA / MQTT → InfluxDB → Grafana</sub></td><td width="33%"><span data-repo="iolistgen">06 · iolistgen</span> <sub>(готовится)</sub><br><sub>перечень сигналов → ST, карты Modbus, SCADA</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/kr0nsch/plc-ci-toolkit"><b>07 · plc-ci-toolkit</b></a><br><sub>линтеры, сборка CODESYS, тесты, JUnit</sub></td><td width="33%"><a href="https://github.com/kr0nsch/s7-to-codesys">08 · s7-to-codesys</a><br><sub>конвертер SCL → ST с отчётом о переносе</sub></td><td width="33%"><a href="https://github.com/kr0nsch/sis-interlock-demo">09 · sis-interlock-demo</a><br><sub>ПАЗ: MooN, матрица причин и следствий</sub></td></tr>
 </table>
