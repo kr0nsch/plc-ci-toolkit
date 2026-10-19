@@ -342,8 +342,9 @@ Workflow проверяют текстовую раскладку `src/` и `tes
    что выгружено, переносится в проект и обратно без изменений.
 5. **Линтер и статанализ.** `python tools/check/st_lint.py --strict` проверяет правила
    CONTRIBUTING.md шаблона: заголовки POU, префиксы имён, «магические числа». Правила, которые
-   существующий код пока не выполняет, переведите в `warning` или `off` (раздел `[severity]`
-   `tools/check/st_lint.toml`), отдельные места — подавлением `// lint:allow STL008 причина`
+   существующий код пока не выполняет, переведите в `off` (раздел `[severity]`
+   `tools/check/st_lint.toml`; `warning` не поможет — с `--strict`, как в CI и хуке pre-commit,
+   предупреждения тоже дают код 1), отдельные места — подавлением `// lint:allow STL008 причина`
    ([tools/README.md](../tools/README.md#checkst_lintpy--линтер)). Находки iec_checker обосновываются
    в `tools/check/iec_checker_allow.toml`; на первое время статанализ можно выключить входом
    `iec-checker: off`.

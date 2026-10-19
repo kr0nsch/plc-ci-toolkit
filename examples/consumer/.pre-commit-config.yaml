@@ -1,7 +1,7 @@
 # Пример .pre-commit-config.yaml для репозитория на шаблоне plc-repo-template.
 #
 # Скопируйте файл в корень своего репозитория и установите хуки (один раз в каждом клоне):
-#   python -m pip install --user pre-commit
+#   python -m pip install pre-commit
 #   python -m pre_commit install
 # Проверить все файлы вручную: python -m pre_commit run --all-files
 # Описание хуков, сообщений и ограничений:

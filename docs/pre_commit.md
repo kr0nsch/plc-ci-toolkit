@@ -14,11 +14,14 @@
 2. Установить pre-commit и хуки (один раз в каждом клоне; Python 3.11+):
 
    ```bat
-   python -m pip install --user pre-commit
+   python -m pip install pre-commit
    python -m pre_commit install
    ```
 
-   Форма `python -m pre_commit` работает, даже если каталог `Scripts` пользователя не в `PATH`.
+   В активированном venv pre-commit ставится в него (ключ `--user` там не работает: «Can not
+   perform a '--user' install»); без venv, если общий каталог пакетов закрыт на запись, pip сам
+   ставит пакет для пользователя. Форма `python -m pre_commit` работает, даже если каталог
+   `Scripts` пользователя не в `PATH`.
    Первый запуск скачивает ruff и ставит хуки в `%USERPROFILE%\.cache\pre-commit` — нужен доступ к
    GitHub и PyPI; дальше хуки работают без сети.
 3. Проверить все файлы: `python -m pre_commit run --all-files`. Обновить версии хуков:

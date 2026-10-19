@@ -401,7 +401,7 @@ Windows-job — задание `codesys` переиспользуемого work
 В каждом клоне репозитория (включая машину раннера, если там правят код) — один раз:
 
 ```bat
-python -m pip install --user pre-commit
+python -m pip install pre-commit
 python -m pre_commit install
 ```
 

@@ -26,10 +26,11 @@
 
 **CI для ПЛК-проектов на CODESYS V3.5 в GitHub.** Проект CODESYS — бинарный файл `.project`: в git
 не видно, что изменилось, pull request не отревьюить, а сборку и юнит-тесты запускают вручную в IDE.
-plc-ci-toolkit проверяет код, который лежит в репозитории текстом (ST в `src/` и `tests/`): каждый
-pull request — линтер и статанализ примерно за минуту без CODESYS, каждый push в `main` — сборка в
-настоящем CODESYS и юнит-тесты на вашем Windows-раннере. Для команд АСУ ТП у интеграторов и
-машиностроителей, которые ведут проекты CODESYS в git на GitHub.
+Текст для git даёт шаблон [plc-repo-template](https://github.com/kr0nsch/plc-repo-template):
+исходники ST в `src/` и `tests/`, куда проект один раз выгружается командой `cds.py export` из
+`tools/` шаблона. plc-ci-toolkit — CI для репозиториев на этом шаблоне и с его `tools/`: каждый pull request —
+линтер и статанализ примерно за минуту без CODESYS, каждый push в `main` — сборка в настоящем
+CODESYS и юнит-тесты на вашем Windows-раннере. Для команд АСУ ТП, которые ведут проекты CODESYS в git.
 
 ## Что это и зачем
 
@@ -60,8 +61,9 @@ pull request — линтер и статанализ примерно за ми
 
 **Что нужно от репозитория.** Исходники — текстом ST в раскладке шаблона
 [plc-repo-template](https://github.com/kr0nsch/plc-repo-template) (`src/`, `tests/`), рядом — его
-инструменты `tools/`: workflow вызывают именно их. Проект пока только в `.project` — его
-выгружают в раскладку командой `cds.py export` ([как](#если-проект-ещё-не-на-шаблоне)).
+инструменты `tools/`: workflow вызывают именно их, сам тулкит `.project` в текст не переводит.
+Проект пока только в `.project` — его выгружают в раскладку командой `cds.py export` шаблона
+([как](#если-проект-ещё-не-на-шаблоне)).
 
 <details>
 <summary>Термины: coUnit, JUnit XML, st_lint, iec_checker, RuSTy, Control Win V3, self-hosted раннер</summary>
@@ -228,8 +230,9 @@ python tools/check/run_rusty.py --plc <путь к plc> --stdlib <каталог
 <summary>С CODESYS 3.5.17.30 на Windows: шаги Windows-задания</summary>
 
 Нужны CODESYS 3.5.17.30 с CODESYS Control Win V3 и coUnit 1.2.0.0
-([MANUAL_STEPS.md, разделы 1–4](docs/MANUAL_STEPS.md#1-установка-codesys-351730)). Те же команды и
-в том же порядке, что у задания `plc-codesys.yml` (cmd или PowerShell):
+([MANUAL_STEPS.md, разделы 1–4](docs/MANUAL_STEPS.md#1-установка-codesys-351730)). Те же команды
+CODESYS и в том же порядке, что у задания `plc-codesys.yml` (cmd или PowerShell); его служебные
+шаги для GitHub — проверка раннера (`ci/runner_check.py`) и сводка (`ci/summary.py`) — здесь опущены:
 
 ```bat
 python tools\codesys\cds.py build
@@ -248,8 +251,8 @@ python tools\codesys\cds.py runtime stop
 
 ## Как использовать в своём проекте
 
-Как это выглядит в работе: инженер правит ST в `src/` (или в IDE, затем `cds.py export`), хук
-pre-commit проверяет коммит, pull request проходит проверки без CODESYS, а после слияния код в
+Как это выглядит в работе: инженер правит ST в `src/` (или в IDE — [Работа в IDE](#работа-в-ide)),
+хук pre-commit проверяет коммит, pull request проходит проверки без CODESYS, а после слияния код в
 `main` собирается и тестируется в CODESYS на раннере. Полная справка — [docs/USAGE.md](docs/USAGE.md).
 
 ### Что нужно в репозитории
@@ -273,10 +276,33 @@ pre-commit проверяет коммит, pull request проходит про
    пересоздаётся из текста — с устройством CODESYS Control Win V3, на котором CI собирает и
    тестирует код.
 4. `python tools/check/st_lint.py --strict`. Правила линтера, которые код пока не выполняет, —
-   уровнем `warning` или `off` в `tools/check/st_lint.toml`.
+   уровнем `off` в разделе `[severity]` файла `tools/check/st_lint.toml` (`warning` не поможет:
+   с `--strict`, как в CI и pre-commit, предупреждения тоже дают код 1), отдельные места —
+   подавлением `// lint:allow STL008 причина`.
 
-Команды `cds.py` — на Windows с CODESYS 3.5.17.30. Что не выгружается в текст (графические языки,
-визуализации, дерево устройств) и подробности — [docs/USAGE.md, раздел 9](docs/USAGE.md#9-если-проект-ещё-не-на-шаблоне).
+Команды `cds.py` — на Windows с CODESYS 3.5.17.30. Перенос готового проекта целиком не
+проверялся: `export`, `import --clean` и `build` проверены в CODESYS только на примере шаблона. Что
+не выгружается в текст (графические языки, действия, визуализации, дерево устройств) и
+подробности — [docs/USAGE.md, раздел 9](docs/USAGE.md#9-если-проект-ещё-не-на-шаблоне).
+
+### Работа в IDE
+
+`.project` в git нет: его собирают из текста, правят в IDE и перед коммитом выгружают обратно
+(Windows, CODESYS 3.5.17.30):
+
+```bat
+python tools\codesys\cds.py import
+rem открыть build\<имя каталога репозитория>.project в CODESYS, править, сохранить, закрыть IDE
+python tools\codesys\cds.py export
+git add src
+git commit -m "fix: ..."
+```
+
+Проект с тестами — `import --tests` и `export --tests` (`build\<имя>-tests.project`). Пока проект
+открыт в IDE, `cds.py` с ним не работает; `import` не перезапишет правки, сохранённые в IDE и не
+выгруженные. Задачи и библиотеки правят в `tools/codesys/config.json`, а не в IDE. Если проект
+сохранён в IDE, а `export` забыт, коммит остановит [хук pre-commit](#хук-pre-commit). Подробно —
+[MANUAL_STEPS.md, раздел 6](docs/MANUAL_STEPS.md#6-работа-в-ide-и-экспорт-перед-коммитом).
 
 ### Порядок подключения
 
@@ -418,7 +444,7 @@ coUnit, Static Analysis Light (как на скриншоте сводки вы�
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kr0nsch/plc-ci-toolkit/v1/examples/consumer/.pre-commit-config.yaml \
   -o .pre-commit-config.yaml
-python -m pip install --user pre-commit
+python -m pip install pre-commit
 python -m pre_commit install
 ```
 
@@ -534,7 +560,8 @@ flowchart LR
 
 **Не проверено:** Windows-задание на настоящем self-hosted раннере GitHub (поэтому бейдж CODESYS
 статичный), очередь заданий на одном раннере, раннер как служба Windows, вызов workflow из другого
-репозитория на GitHub.
+репозитория на GitHub, перенос существующего проекта целиком (команды переноса проверены только на
+примере шаблона).
 
 <details>
 <summary>Проверить сам plc-ci-toolkit (Python 3.11+, CODESYS не нужен)</summary>
@@ -588,9 +615,14 @@ actionlint
   задания идут по очереди.
 - **Проверено только с CODESYS 3.5.17.30** (по умолчанию — 32-битная сборка ОВЕН). Другая версия
   или сборка — `tools/codesys/config.json` и переменные `CODESYS_EXE`, `CODESYS_PROFILE`,
-  `CDS_DEVICE_*`; Static Analysis Light включается через внутренние имена 3.5.17.30 и в другой
-  версии откажет с кодом 3 — тогда ручной шаг ([MANUAL_STEPS.md, раздел 16](docs/MANUAL_STEPS.md#16-static-analysis-light-правила-в-ide)).
+  `CDS_DEVICE_*`; Static Analysis Light включается через внутренние имена 3.5.17.30, в другой
+  версии это не проверялось: при отказе `sa_check.py` завершается с кодом 3, и правила включают
+  вручную ([MANUAL_STEPS.md, раздел 16](docs/MANUAL_STEPS.md#16-static-analysis-light-правила-в-ide)).
   Правила платного CODESYS Static Analysis недоступны.
+- **Только объекты на ST.** POU на FBD, LD, SFC и CFC, действия (`ACTION`), визуализации, дерево
+  устройств и конфигурация ввода-вывода в текст не выгружаются — линтер, статанализ и сборка в CI их
+  не видят; CI собирает код на CODESYS Control Win V3, а не на устройстве вашего ПЛК
+  ([USAGE.md, раздел 9](docs/USAGE.md#9-если-проект-ещё-не-на-шаблоне)).
 - **GitHub Enterprise Server не поддерживается** ([USAGE.md, раздел 6](docs/USAGE.md#6-версии-и-закрепление)).
 - **Раннер как служба Windows** с рантаймом в пользовательском процессе не проверен; проверенный
   режим — интерактивный `run.cmd` ([runner_setup.md, 7.2–7.3](docs/runner_setup.md#72-интерактивный-запуск--для-первого-прогона)).
@@ -610,11 +642,13 @@ actionlint
 ## Summary (EN)
 
 Reusable GitHub Actions workflows and a pre-commit hook for CODESYS V3.5 (3.5.17.30) repositories
-that keep ST sources as text. `plc-static.yml` (GitHub-hosted Linux, every push and pull request):
-ruff, mypy, pytest, the `st_lint` linter, iec_checker, RuSTy. `plc-codesys.yml` (self-hosted Windows,
-`main`, tags and manual runs only): Static Analysis Light, CODESYS build, Control Win V3, coUnit
-tests, JUnit; pull requests and forks never reach the runner. Linux jobs are green on GitHub; the
-Windows job was verified locally with real CODESYS and awaits a runner. Docs are in Russian.
+built on plc-repo-template: ST sources as text plus the template's `tools/`, which the workflows
+call (the toolkit does not convert `.project` files itself). `plc-static.yml` (GitHub-hosted Linux,
+every push and pull request): ruff, mypy, pytest, the `st_lint` linter, iec_checker, RuSTy.
+`plc-codesys.yml` (self-hosted Windows, `main`, tags and manual runs only): Static Analysis Light,
+CODESYS build, Control Win V3, coUnit tests, JUnit; pull requests and forks never reach the runner.
+Linux jobs are green on GitHub; the Windows job was verified locally with real CODESYS and awaits a
+runner. Only ST objects are covered (no graphical POUs or visualizations). Docs are in Russian.
 
 ## Лицензия
 

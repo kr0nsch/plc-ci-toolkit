@@ -22,7 +22,11 @@
   каталогов; что проверено и что нет; документация в виде «вопрос → документ». Бейджи: добавлен выпуск,
   убраны статичный бейдж с числом тестов и справочные (IEC 61131-3, Python, workflow_call, actionlint).
   Скриншот прогона CI на GitHub
-  (`docs/media/shot-github-ci-*.png`); подпись схемы конвейера — итог прогонов на GitHub.
+  (`docs/media/shot-github-ci-*.png`); подпись схемы конвейера — итоги локального прогона 19.10.2026 и
+  текущее число тестов. Первый экран называет зависимость от раскладки и `tools/` plc-repo-template;
+  раздел «Работа в IDE» (`cds.py import` → правка в IDE → `cds.py export` → коммит); в ограничениях —
+  только объекты ST (графические POU, `ACTION`, визуализации, дерево устройств не проверяются), перенос
+  готового проекта целиком не проверялся.
 - `docs/USAGE.md`: раздел 9 — перевод существующего проекта CODESYS на раскладку шаблона; ожидаемый
   результат шагов раздела 1, совместимость с `tools/` шаблона. `docs/TEST_REPORT.md`: проверки без
   CODESYS — прогон CI на GitHub и локальный от 19.10.2026, протоколы пробных прогонов workflow.
@@ -33,6 +37,12 @@
 - README, `docs/ASSUMPTIONS.md`: Linux-задания на GitHub зелёные не «с первого push» — первый прогон упал
   на mypy под Linux (исправлено в `1aee06c`). README: быстрый старт ставит pre-commit, которого нет в
   `requirements-dev.txt`; actionlint помечен необязательным, с версией 1.7.12.
+- README, `docs/USAGE.md` (раздел 9): при переводе проекта на шаблон невыполненные правила `st_lint`
+  выключаются уровнем `off` — `warning` с `--strict` (CI, pre-commit) тоже даёт код 1.
+- README, `docs/pre_commit.md`, `docs/MANUAL_STEPS.md`, `examples/consumer/.pre-commit-config.yaml`:
+  pre-commit ставится `python -m pip install pre-commit` — с `--user` установка в venv не работает.
+- README: Static Analysis Light на другой версии CODESYS — «не проверено, при отказе код 3», а не
+  «откажет»; локальные шаги Windows-задания — те же команды CODESYS, без служебных шагов для GitHub.
 
 ## [1.0.0] - 2026-10-19
 
