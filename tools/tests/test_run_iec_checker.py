@@ -232,8 +232,9 @@ checker = "nightly"
         ([], "v0.4", "UnusedVariable", "PLCOPEN-CP17"),
         (["--docker", "img:tag"], "nightly", "PLCOPEN-CP17", "UnusedVariable"),
         (["--checker", "nightly"], "nightly", "PLCOPEN-CP17", "UnusedVariable"),
+        (["--docker", "img:tag", "--checker", "v0.4"], "v0.4", "UnusedVariable", "PLCOPEN-CP17"),
     ],
-    ids=["binary", "docker", "explicit"],
+    ids=["binary", "docker", "explicit", "docker-v0.4"],
 )
 def test_main_checker_scopes_allow_rules(
     sample_copy: Path, monkeypatch: pytest.MonkeyPatch, args: list[str], checker: str, allowed: str, error: str
@@ -254,6 +255,25 @@ def test_main_checker_scopes_allow_rules(
     # запись другой версии не считается неиспользованной
     assert report["unused_allow"] == []
     assert f"для версии {checker}" in (sample_copy / "build" / "iec_checker.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("args", "found_id", "unused_id"),
+    [([], "PLCOPEN-CP17", "UnusedVariable"), (["--checker", "nightly"], "UnusedVariable", "PLCOPEN-CP17")],
+    ids=["v0.4", "nightly"],
+)
+def test_main_checker_scoped_rule_unused_for_own_version(
+    sample_copy: Path, monkeypatch: pytest.MonkeyPatch, args: list[str], found_id: str, unused_id: str
+) -> None:
+    """Запись своей версии, под которую не попала ни одна находка, отчёт показывает неиспользованной."""
+    found = f'[{{"linenr":9,"column":10,"file":"","id":"{found_id}","msg":"RVALUE"}}]'
+    fake_checker(monkeypatch, {"F_Clamp.st": found})
+    allow = sample_copy / "allow.toml"
+    allow.write_text(ALLOW_BY_CHECKER, encoding="utf-8")
+    assert R.main(["--root", str(sample_copy), "--allow", str(allow), *args]) == 1
+    report = json.loads((sample_copy / "build" / "iec_checker.json").read_text(encoding="utf-8"))
+    assert [f["status"] for f in report["findings"]] == ["error"]
+    assert [r["id"] for r in report["unused_allow"]] == [unused_id]
 
 
 def test_main_optional_and_errors(
