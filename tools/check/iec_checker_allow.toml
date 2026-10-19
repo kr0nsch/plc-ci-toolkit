@@ -64,7 +64,7 @@ id = "UnusedVariable"
 file = "tests/POUs/FB_Example_Test/*.method.decl.st"
 match = "FBDUT"
 checker = "v0.4"
-reason = "Ложное срабатывание iec_checker 0.4: экземпляр ФБ используется вызовом fbDut(...), чтением выходов и вызовом методов — это он не считает использованием (как stCmd/stSts в PRG_Main). Образ nightly вызов экземпляра считает использованием"
+reason = "Ложное срабатывание iec_checker 0.4: экземпляр ФБ используется вызовом fbDut(...), чтением выходов и вызовом методов — это он не считает использованием (как stCmd/stSts в PRG_Main). Образ nightly считает использованием обращение к полю (чтение выходов fbDut.xOut, fbDut.xFault, fbDut.Count, fbDut.rSetpointUsed_pct — хотя бы одно есть в каждом методе), как для stCmd/stSts; сам вызов fbDut(...) не учитывает и он"
 
 [[allow]]
 id = "UnusedVariable"
