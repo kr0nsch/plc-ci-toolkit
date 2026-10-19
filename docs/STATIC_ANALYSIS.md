@@ -10,15 +10,17 @@
 |---|---|---|---|
 | `tools/check/st_lint.py --strict` | локально и в CI | `src/`, `tests/` | вывод в консоль, код выхода ≠ 0 при нарушениях |
 | `tools/check/run_iec_checker.py --tests` | локально и в CI (обязательно): бинарник iec_checker v0.4 из релизов github.com/jubnzv/iec-checker | `build/assembled/iec-checker/` (вариант сборки `iec-checker`) | `build/iec_checker.json`, `build/iec_checker.md` |
-| то же с `--docker` | CI, необязательное задание: образ `jubnzv1/iec-checker:nightly`, закреплённый по дайджесту в `ci.yml` | то же | то же, артефакт `iec-checker-nightly-reports` |
+| то же с `--docker` | CI, необязательное задание: образ `jubnzv1/iec-checker:nightly`, закреплённый по дайджесту в `plc-static.yml`; обоснования — записи без ключа `checker` и с `checker = "nightly"` | то же | то же, артефакт `plc-static-nightly-reports` |
 | `tools/check/run_rusty.py` | локально и в CI (необязательное задание): RuSTy `plc --check` | `build/assembled/rusty/` (вариант сборки `rusty`, `src/` и `tests/`) | `build/rusty.log`, `build/rusty.json` |
 | `ci/sa_check.py`, затем `ci/sa_report.py` | Windows с CODESYS: локально и в CI (`plc-codesys.yml`, шаг Static Analysis Light) — правила CODESYS Static Analysis Light на время сеанса, генерация кода ([sa_light.md](sa_light.md)) | рабочий проект из `src/` (после `cds.py build`) | `build/sa.json`, `build/sa.log`, `build/sa_report.md`, `build/sa_report.json`; принятые находки — `ci/sa_baseline.json` |
 
 Обоснования в `tools/check/iec_checker_allow.toml` подобраны под находки v0.4 — той же версии, что в
 обязательном шаге CI. Образ `nightly` разбирает больше конструкций и может находить иначе: если
-находка есть только в одной версии — укажите это в столбце «решение». Интеграционный тест
-`tools/tests/test_run_iec_checker.py::test_integration_repository_sources` проверяет, что каждое
-обоснование используется: после правок примера уберите устаревшие записи.
+находка есть только в одной версии — укажите это в столбце «решение», а запись пометьте ключом
+`checker` (`"nightly"` или `"v0.4"`): такая запись применяется только при прогоне своей версией.
+Интеграционный тест `tools/tests/test_run_iec_checker.py::test_integration_repository_sources` (v0.4)
+проверяет, что каждое обоснование, кроме записей `checker = "nightly"`, используется: после правок
+примера уберите устаревшие записи.
 
 ## Последний прогон
 
@@ -31,7 +33,8 @@
 | 2026-10-16 | `ci/sa_check.py` + `ci/sa_report.py` (CODESYS 3.5.17.30, Static Analysis Light, 6 правил, локально) | рабочий проект `src/` | находок 0; базовая линия пуста |
 | 2026-10-16 | то же с `--tests` (вне CI, для сведения) | тестовый проект `src/` и `tests/` | 11 × SA0167 «Временный экземпляр ФБ: 'fbDut'» — экземпляр в `VAR` методов `FB_Example_Test`, так задумано ([ASSUMPTIONS.md, C9](ASSUMPTIONS.md)); тестовый проект CI не анализирует |
 | 2026-10-19 | iec_checker 0.4 (CI, Linux, `plc-static.yml`) | 11 объектов `src/` и `tests/` | ошибок разбора нет; необоснованных 0; обоснованных 100; артефактов сборки 10 ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)) |
-| 2026-10-19 | iec_checker `nightly` (CI, необязательно) | то же | необоснованных 0; обоснованных 88 ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)) |
+| 2026-10-19 | iec_checker `nightly` (CI, необязательно) | то же | необоснованных 0; обоснованных 88; два обоснования UnusedVariable (`stCmd`, `stSts` в `PRG_Main`, `fbDut` в `FB_Example_Test`) образу не понадобились — помечены `checker = "v0.4"` ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39250370443)) |
+| 2026-10-19 | находки того же прогона nightly, пересчитанные локально с новым файлом обоснований | то же (сборка совпадает с CI побайтно) | необоснованных 0; обоснованных 88; артефактов 10; неиспользованных обоснований нет. Сам образ локально не запускался (Docker не установлен) — итог подтвердит следующий прогон CI |
 
 ## Находки
 
@@ -41,7 +44,7 @@
 | PLCOPEN-CP9 | `FB_Example` (тело) | «Code is too complex (28 McCabe complexity)», «(26 statements)» | Обосновано. Пороги iec_checker 0.4 — сложность > 15 и > 25 операторов, а сложность он считает завышенно: проверено на синтетическом примере, одна конструкция `IF … ELSE … END_IF` прибавляет 5. Классическая цикломатическая сложность тела — 8 (7 точек ветвления: 3 в `CASE`, 3 в `IF … ELSIF`, 1 в счётчике). Делить 40 строк линейной логики на методы ради метрики — хуже для чтения |
 | PLCOPEN-L17 | `FB_Example`: `IF xFault …` в режиме `Auto`, `IF` счётчика включений | «Each IF instruction should have an ELSE clause» | Обосновано: действия «иначе» нет. В зоне гистерезиса выход сохраняет состояние, без фронта счётчик не меняется. Пустая ветка `ELSE` или присваивание переменной самой себе только добавили бы шум |
 | PLCOPEN-L17 | `PRG_Main`: обработка `stCmd.xAck`, `stCmd.xReset` | то же | Обосновано: однократная команда не пришла — делать нечего |
-| UnusedVariable | `PRG_Main`: `stCmd`, `stSts` | «Found unused local variable» | Ложное срабатывание: переменные используются через поля (`stCmd.xAck`, `stSts.xOut := …`), iec_checker 0.4 обращения к полям структуры не учитывает. Перепроверить на образе `nightly` |
+| UnusedVariable | `PRG_Main`: `stCmd`, `stSts` | «Found unused local variable» | Ложное срабатывание: переменные используются через поля (`stCmd.xAck`, `stSts.xOut := …`), iec_checker 0.4 обращения к полям структуры не учитывает. Образ `nightly` обращение к полю считает использованием и находки не выдаёт: запись — с `checker = "v0.4"` |
 
 Исправлено по итогам прогона (для истории): защёлка отказа в `FB_Example` и квитирование в
 `Acknowledge` записаны логическими выражениями вместо `IF` без `ELSE`.
@@ -51,7 +54,7 @@
 | Правило | Файл | Находка | Решение / обоснование |
 |---|---|---|---|
 | UnusedVariable | `FB_F_Clamp_Test`: `R_LOW`, `R_HIGH`, `R_INSIDE`, `R_BELOW`, `R_ABOVE`, `R_DELTA`; `FB_Example_Test`: `R_SP_PCT`, `R_HYST_PCT`, … `UDI_TWO_SWITCH_ONS` (10) | «Found unused local variable» | Артефакт понижения: константы набора (`VAR CONSTANT`) используются в методах-тестах, которые сборка выносит в отдельные функции |
-| UnusedVariable | `FB_Example_Test`: `fbDut` в 10 методах | то же | Ложное срабатывание, как для `stCmd`/`stSts` в `PRG_Main`: экземпляр используется вызовом `fbDut(...)`, чтением выходов и вызовом методов, iec_checker 0.4 это использованием не считает (в методе, где `fbDut` присваивается интерфейсу, находки нет) |
+| UnusedVariable | `FB_Example_Test`: `fbDut` в 10 методах | то же | Ложное срабатывание, как для `stCmd`/`stSts` в `PRG_Main`: экземпляр используется вызовом `fbDut(...)`, чтением выходов и вызовом методов, iec_checker 0.4 это использованием не считает (в методе, где `fbDut` присваивается интерфейсу, находки нет). Образ `nightly` находки не выдаёт: запись — с `checker = "v0.4"` |
 | UnusedVariable | `PRG_Tests`: `fbF_ClampTest`, `fbExampleTest` | то же | Ложное срабатывание: экземпляры используются вызовом `AreAllTestsFinished()` и регистрируются в coUnit самим объявлением |
 | PLCOPEN-CP9 | `FB_F_Clamp_Test` (1), `FB_Example_Test` (14) | «Code is too complex (16…40 McCabe complexity)», «(33…48 statements)» | Обосновано: в наборах и методах-тестах нет ветвлений (классическая сложность — 1), это последовательности вызовов и проверок; завышенный подсчёт iec_checker. Для тестов метрика не показательна |
 | PLCOPEN-CP3 | `FB_F_Clamp_Test`, `FB_Example_Test`, `PRG_Tests` (25) | как выше | Обосновано, как для `src/`: результаты и экземпляры получают значения до чтения |

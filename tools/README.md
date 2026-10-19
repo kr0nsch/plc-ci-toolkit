@@ -302,7 +302,8 @@ FUNCTION_BLOCK FB_Example
 
 ```
 python tools/check/run_iec_checker.py [--tests] [--binary PATH | --docker IMAGE] [--allow FILE]
-                                     [--out DIR] [--json FILE] [--md FILE] [--strip-namespace NS]... [--optional]
+                                     [--checker {v0.4,nightly}] [--out DIR] [--json FILE] [--md FILE]
+                                     [--strip-namespace NS]... [--optional]
 ```
 
 1. Собирает вариант `iec-checker` (по умолчанию только `src/`, с `--tests` — и `tests/`) в
@@ -330,10 +331,15 @@ python tools/check/run_iec_checker.py [--tests] [--binary PATH | --docker IMAGE]
 id = "PLCOPEN-CP3"          # правило iec_checker (шаблон fnmatch)
 file = "src/POUs/F_Clamp/*" # путь исходника или имя собранного файла (шаблон fnmatch, * захватывает /)
 match = "RVALUE|RMIN"       # необязательно: регулярное выражение по тексту сообщения
+checker = "nightly"         # необязательно: только для этой версии разборщика (v0.4 или nightly)
 reason = "..."              # обязательно; подробный разбор — docs/STATIC_ANALYSIS.md
 ```
 
 Неиспользованные записи выводятся предупреждением (записи для `tests/` — только при `--tests`).
+Версия разборщика `--checker`: по умолчанию `nightly` с `--docker` (образ необязательного задания CI) и
+`v0.4` с бинарником. Запись с ключом `checker` другой версии не применяется и неиспользованной не
+считается: так находки новых правил образа `nightly` (например, PLCOPEN-CP17) обосновываются, не ломая
+проверку «каждая запись используется» для v0.4. Версия попадает в отчёты (поле `checker` в JSON).
 `--optional`: нет бинарника или docker — предупреждение и код 0.
 
 ## `check/run_rusty.py` — проверка RuSTy
@@ -807,7 +813,7 @@ default library»), а потребителю эта настройка не п�
 | `test_cds_config.py` | `config.json` репозитория — только на уровне схемы: JSON без путей пользователя, те же разделы и ключи, что у эталона `fixtures/config_template.json`, полные описания режимов, задач и библиотек, всё разрешается |
 | `test_assemble.py` | эталоны всех вариантов (`tools/tests/golden/<вариант>/`) и понижения примера `fixtures/lowering/` (`golden/iec-checker-lowering/`), порядок `all.st`, карта строк (в том числе после понижения многострочных конструкций примера `fixtures/sourcemap/`, для всех вариантов), CLI, каждое правило замен rusty и понижения iec-checker, вычисление константных выражений |
 | `test_st_lint.py` | каждое правило — срабатывание и отсутствие (в том числе составные префиксы массивов и `VAR_IN_OUT CONSTANT`), подавления, настройки: эталон шаблона равен умолчаниям, файл репозитория разбирается и не содержит неизвестных ключей, CLI |
-| `test_run_rusty.py`, `test_run_iec_checker.py` | поиск инструментов, команды, разбор вывода, обоснования, отчёты; интеграционные — с настоящими `plc` и iec_checker: фикстура `sample` (со своим пустым файлом исключений RuSTy), пример понижения `lowering` (ошибок разбора 0), строки находок примера `sourcemap` (PLCOPEN-CP8 — ровно на строках сравнений, OutOfBounds поддиапазона — у DUT, нет ZeroDivision и PLCOPEN-CP28 от `TIME()`), `VAR_IN_OUT CONSTANT` и преобразования TIME в RuSTy, а также `src/` и `tests/` репозитория с его собственным `iec_checker_allow.toml` (`test_integration_repository_sources`): в проекте тест проверяет исходники проекта его обоснованиями, и с `--tests` каждое обоснование должно использоваться |
+| `test_run_rusty.py`, `test_run_iec_checker.py` | поиск инструментов, команды, разбор вывода, обоснования, отчёты; интеграционные — с настоящими `plc` и iec_checker: фикстура `sample` (со своим пустым файлом исключений RuSTy), пример понижения `lowering` (ошибок разбора 0), строки находок примера `sourcemap` (PLCOPEN-CP8 — ровно на строках сравнений, OutOfBounds поддиапазона — у DUT, нет ZeroDivision и PLCOPEN-CP28 от `TIME()`), `VAR_IN_OUT CONSTANT` и преобразования TIME в RuSTy, а также `src/` и `tests/` репозитория с его собственным `iec_checker_allow.toml` (`test_integration_repository_sources`): в проекте тест проверяет исходники проекта его обоснованиями, и с `--tests` каждое обоснование, кроме записей `checker = "nightly"`, должно использоваться; область записей по `checker` (`test_main_checker_scopes_allow_rules`) |
 
 **Настройки в тестах.** `test_cds.py` и `test_cds_library.py` берут настройки из эталона
 `tools/tests/fixtures/config_template.json` — копии `config.json` шаблона, — а не из `config.json`

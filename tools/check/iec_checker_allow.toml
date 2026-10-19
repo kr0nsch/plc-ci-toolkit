@@ -7,8 +7,14 @@
 #   file   — шаблон fnmatch пути исходника (src/POUs/...) или имени собранного файла (FB_X.st);
 #            '*' захватывает и '/';
 #   match  — необязательно: регулярное выражение по тексту сообщения;
-#   reason — обязательно: почему находка допустима.
+#   reason — обязательно: почему находка допустима;
+#   checker — необязательно: "v0.4" (обязательная проверка, бинарник) или "nightly" (необязательное
+#            задание CI, Docker-образ, закреплённый по дайджесту в plc-static.yml). Запись с этим ключом
+#            применяется и проверяется на использование только при прогоне своей версией.
 # ParserError и LexingError обосновать нельзя: их исправляют в коде или в понижении iec-checker.
+# С --tests (v0.4) используется каждая запись, кроме checker = "nightly" (проверяет pytest:
+# test_run_iec_checker.py::test_integration_repository_sources). Записи для образа nightly — в последнем
+# разделе: их пересматривают вместе с дайджестом образа.
 
 [[allow]]
 id = "PLCOPEN-CP3"
@@ -44,7 +50,8 @@ reason = "Однократная команда HMI не пришла — дел
 id = "UnusedVariable"
 file = "src/POUs/PRG_Main/PRG_Main.decl.st"
 match = "STCMD|STSTS"
-reason = "Ложное срабатывание iec_checker 0.4: обращения к полям структуры (stCmd.xAck, stSts.xOut) он не считает использованием"
+checker = "v0.4"
+reason = "Ложное срабатывание iec_checker 0.4: обращения к полям структуры (stCmd.xAck, stSts.xOut) он не считает использованием. Образ nightly обращение к полю структуры считает использованием"
 
 [[allow]]
 id = "UnusedVariable"
@@ -56,7 +63,8 @@ reason = "Артефакт понижения: константы набора (
 id = "UnusedVariable"
 file = "tests/POUs/FB_Example_Test/*.method.decl.st"
 match = "FBDUT"
-reason = "Ложное срабатывание iec_checker 0.4: экземпляр ФБ используется вызовом fbDut(...), чтением выходов и вызовом методов — это он не считает использованием (как stCmd/stSts в PRG_Main)"
+checker = "v0.4"
+reason = "Ложное срабатывание iec_checker 0.4: экземпляр ФБ используется вызовом fbDut(...), чтением выходов и вызовом методов — это он не считает использованием (как stCmd/stSts в PRG_Main). Образ nightly вызов экземпляра считает использованием"
 
 [[allow]]
 id = "UnusedVariable"
