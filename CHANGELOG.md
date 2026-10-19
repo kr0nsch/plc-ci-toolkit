@@ -52,8 +52,11 @@
 - Документы раннера: `docs/runner_setup.md` (учётная запись, CODESYS, рантайм как процесс или служба,
   переменные, демо-режим 2 ч), `docs/runner_security.md` (модель угроз, меры, чек-лист),
   `docs/MANUAL_STEPS.md` — регистрация раннера и первый прогон Windows-job (разделы 9–15, 17).
-- README: демонстрация — GIF реального прогона команд Windows-job (`docs/media/demo-codesys-job.gif`)
-  и сводка задания с упавшим тестом из пробного прогона (`docs/media/shot-codesys-summary-*.png`);
+- README: баннер (`docs/media/banner-*.svg`), бейджи, навигация и подвал портфолио; демонстрация —
+  схема конвейера с итогами локального прогона (`docs/media/diagram-pipeline-*.png`), GIF реальных
+  прогонов Linux-job (`demo-static-job.gif`), Static Analysis Light (`demo-codesys-sa.gif`), сборки и
+  тестов coUnit в Control Win V3 (`demo-codesys-job.gif`), остановки коммита хуком pre-commit
+  (`demo-precommit-fail.gif`) и сводка задания с упавшим тестом (`docs/media/shot-codesys-summary-*.png`);
   схема пайплайна, подключение за 10 минут, безопасность раннера. `docs/ARCHITECTURE.md` — устройство
   workflow, порядок шагов Windows-job, кто пишет и читает отчёты `build/`.
 - Раскладка исходников ST в `src/` и `tests/` и её формальный контракт `docs/LAYOUT.md`.

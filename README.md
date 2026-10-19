@@ -1,13 +1,30 @@
-# plc-ci-toolkit
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/banner-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/banner-light.svg">
+    <img alt="Баннер plc-ci-toolkit: конвейер CI из двух дорожек — Linux-проверки и сборка с тестами в CODESYS" src="docs/media/banner-light.svg" width="100%">
+  </picture>
+</p>
 
-<p>
+<p align="center">
   <a href="https://github.com/<GITHUB_USER>/plc-ci-toolkit/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/<GITHUB_USER>/plc-ci-toolkit/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1B2736"></a>
   <a href="docs/MANUAL_STEPS.md#12-первый-прогон-windows-job"><img alt="CODESYS job: ожидает первого прогона на раннере" src="https://img.shields.io/badge/CODESYS%20job-pending%20first%20run-56677D?style=flat-square&labelColor=1B2736"></a>
-  <a href=".github/actionlint.yaml"><img alt="Workflow проверены actionlint" src="https://img.shields.io/badge/workflows-actionlint-3A4B60?style=flat-square&labelColor=1B2736"></a>
-  <img alt="CODESYS 3.5.17.30" src="https://img.shields.io/badge/CODESYS-3.5.17.30-C2410C?style=flat-square&labelColor=1B2736">
-  <img alt="GitHub Actions: reusable workflows" src="https://img.shields.io/badge/GitHub%20Actions-workflow__call-3A4B60?style=flat-square&logo=githubactions&logoColor=white">
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3A4B60?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="Лицензия MIT" src="https://img.shields.io/badge/license-MIT-56677D?style=flat-square&labelColor=1B2736"></a>
+  <img alt="CODESYS 3.5.17.30" src="https://img.shields.io/badge/CODESYS-3.5.17.30-C2410C?style=flat-square&labelColor=1B2736">
+  <img alt="IEC 61131-3" src="https://img.shields.io/badge/IEC%2061131--3-56677D?style=flat-square">
+  <img alt="GitHub Actions: переиспользуемые workflow" src="https://img.shields.io/badge/GitHub%20Actions-workflow__call-3A4B60?style=flat-square&logo=githubactions&logoColor=white">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3A4B60?style=flat-square&logo=python&logoColor=white">
+  <a href=".github/actionlint.yaml"><img alt="Workflow проверены actionlint" src="https://img.shields.io/badge/workflows-actionlint-3A4B60?style=flat-square&labelColor=1B2736"></a>
+  <a href="#тесты-и-проверки"><img alt="Тесты локального прогона 19.10.2026: pytest 680, coUnit 18 из 18" src="https://img.shields.io/badge/tests-pytest%20680%20%C2%B7%20coUnit%2018%2F18-3A4B60?style=flat-square&labelColor=1B2736"></a>
+</p>
+
+<p align="center">
+  <a href="#демонстрация">Демо</a> ·
+  <a href="#архитектура">Архитектура</a> ·
+  <a href="#подключение-за-10-минут">Подключение</a> ·
+  <a href="#быстрый-старт-без-железа">Быстрый старт</a> ·
+  <a href="docs/">Документация</a> ·
+  <a href="#summary-en">Summary (EN)</a>
 </p>
 
 CI для ПЛК-кода на CODESYS V3.5: два переиспользуемых workflow GitHub Actions для репозиториев на
@@ -19,10 +36,51 @@ CODESYS 3.5.17.30, загрузка в CODESYS Control Win V3 и тесты coUn
 
 ## Демонстрация
 
+GIF и сводка ниже сняты с реальных прогонов на этой машине (CODESYS 3.5.17.30, CODESYS Control Win V3,
+coUnit 1.2.0.0): те же команды и в том же порядке, что выполняют задания на раннерах. Схема — рисунок,
+цифры на ней — из этих прогонов. На GitHub workflow ещё не запускались — это первый push
+(см. «Ограничения»).
+
 <p align="center">
-  <img alt="Команды Windows-job в PowerShell: перезапуск рантайма с новым окном демо-режима 120 минут, cds.py test — импорт 38 объектов, сборка без ошибок, 18 тестов coUnit пройдены, JUnit XML, остановка рантайма" src="docs/media/demo-codesys-job.gif" width="900">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/diagram-pipeline-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/media/diagram-pipeline-light.png">
+    <img alt="Схема конвейера: pre-commit и события запуска, дорожка plc-static.yml (ruff и mypy, 680 тестов pytest, st_lint, iec_checker, RuSTy — без замечаний), переход needs: static только для push и ручного запуска, дорожка plc-codesys.yml (guard, Static Analysis Light — 0 находок, перезапуск рантайма, coUnit 18 из 18, JUnit), меры безопасности раннера и итог заданий" src="docs/media/diagram-pipeline-light.png" width="900">
+  </picture>
 </p>
-<p align="center"><sub>Те же команды, что выполняет задание <code>plc-codesys.yml</code> на раннере, — реальный прогон на CODESYS 3.5.17.30 и CODESYS Control Win V3 (16.10.2026), снято term2gif</sub></p>
+<p align="center"><sub>Схема заданий; цифры на узлах — из локального пробного прогона 19.10.2026, того же, что в GIF ниже</sub></p>
+
+**Linux-задание `plc-static.yml`** — проверки без CODESYS, на каждый push и pull request:
+
+<p align="center">
+  <img alt="Шаги задания plc-static.yml в Git Bash: ruff и mypy без замечаний, 680 тестов pytest пройдены, склейка 11 объектов ST, st_lint --strict — 0 замечаний, iec_checker — 0 необоснованных находок, RuSTy — 0 ошибок" src="docs/media/demo-static-job.gif" width="900">
+</p>
+<p align="center"><sub>Реальный прогон 19.10.2026: Git Bash, Windows-сборки iec_checker v0.4 и RuSTy v1.0.6; ожидание pytest сокращено</sub></p>
+
+**Windows-задание `plc-codesys.yml`, шаг 1** — проверка раннера и Static Analysis Light: правила
+включаются скриптом на время сеанса, штатного API для этого в CODESYS 3.5.17 нет ([docs/sa_light.md](docs/sa_light.md)):
+
+<p align="center">
+  <img alt="Проверка раннера и Static Analysis Light в PowerShell: cds.py build собирает проект из src/ без ошибок, sa_check включает 6 правил SA и генерирует код — 0 находок, sa_report сверяет находки с базовой линией — пройдено" src="docs/media/demo-codesys-sa.gif" width="900">
+</p>
+<p align="center"><sub>Реальный прогон на CODESYS 3.5.17.30, 19.10.2026, снято term2gif</sub></p>
+
+**Windows-задание, шаг 2** — сборка, загрузка в CODESYS Control Win V3, прогон coUnit и JUnit XML:
+
+<p align="center">
+  <img alt="Перезапуск рантайма CODESYS Control Win V3 с новым окном демо-режима 120 минут, cds.py test — импорт 39 объектов, сборка без ошибок, 18 из 18 тестов coUnit пройдены, JUnit XML, остановка рантайма" src="docs/media/demo-codesys-job.gif" width="900">
+</p>
+<p align="center"><sub>Реальный прогон на CODESYS 3.5.17.30 и Control Win V3, 19.10.2026; результаты coUnit читаются из рантайма</sub></p>
+
+**Красный путь** — ошибка останавливается до push: хук pre-commit запускает тот же `st_lint`, что
+и CI (там замечание становится аннотацией на строке), и называет файл, строку и столбец:
+
+<p align="center">
+  <img alt="В FB_Example вместо уставки внесено «магическое число» 95.0; git commit останавливает хук pre-commit: st_lint STL008 с файлом, строкой и столбцом, коммит не создан" src="docs/media/demo-precommit-fail.gif" width="900">
+</p>
+<p align="center"><sub>Реальный вывод pre-commit 4.7.0 в копии репозитория с намеренной ошибкой, 19.10.2026</sub></p>
+
+Если до раннера всё же дошёл упавший тест, сводка задания называет набор, тест и сообщение coUnit:
 
 <p align="center">
   <picture>
@@ -31,7 +89,7 @@ CODESYS 3.5.17.30, загрузка в CODESYS Control Win V3 и тесты coUn
     <img alt="Сводка задания CODESYS с упавшим тестом: таблица шагов с ошибкой cds.py test, сборка без ошибок, 18 тестов — 17 пройдено и 1 упал, таблица упавших тестов с сообщением coUnit, Static Analysis Light без находок" src="docs/media/shot-codesys-summary-light.png" width="760">
   </picture>
 </p>
-<p align="center"><sub>Сводка <code>ci/summary.py</code> для <code>$GITHUB_STEP_SUMMARY</code> из локального пробного прогона <code>plc-codesys.yml</code> с намеренно сломанным тестом. Markdown — настоящий вывод скрипта, отрисован локально в стиле GitHub: на GitHub workflow ещё не запускались</sub></p>
+<p align="center"><sub>Вывод <code>ci/summary.py</code> из пробного прогона 16.10.2026 со сломанным тестом, отрисован локально в стиле GitHub</sub></p>
 
 ## Архитектура
 
@@ -220,6 +278,11 @@ python tools/codesys/cds.py runtime stop
   0 находок Static Analysis Light (правила — по умолчанию из plc-ci-toolkit, базовой линии нет),
   18 из 18 тестов coUnit; Windows-задание — и в каталоге с пробелами и скобками в пути.
 
+**Повторный прогон 19.10.2026** — после синхронизации инструментов с шаблоном, медиа в
+«Демонстрации»: Linux-задание — pytest 680 тестов, `st_lint` 0 замечаний, iec_checker 0 необоснованных
+находок, RuSTy 0 ошибок; Windows-задание — Static Analysis Light 0 находок, сборка без ошибок, 18 из 18
+тестов coUnit, JUnit XML; pre-commit останавливает коммит с «магическим числом».
+
 На GitHub workflow ещё не запускались — это первый push (см. «Ограничения»).
 
 ## Документация
@@ -270,3 +333,12 @@ with real CODESYS; the first GitHub run is pending. Docs are in Russian.
 ## Лицензия
 
 [MIT](LICENSE) © 2026 <ИМЯ ФАМИЛИЯ>
+
+---
+
+<p align="center"><b>Портфолио АСУ ТП</b></p>
+<table>
+<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-repo-template">01 · plc-repo-template</a><br><sub>ST в git, сборка проекта скриптом, CI</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-process-lib">02 · plc-process-lib</a><br><sub>ФБ: AI, двигатель, ПЧ, задвижка, ПИД, тревоги</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/kns-pump-station">03 · kns-pump-station</a><br><sub>флагман: КНС, три насоса с ПЧ, модель, HMI</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/kns-port-domestic">04 · kns-port-domestic</a><br><sub>перенос на Astra.IDE / MasterSCADA 4D</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-iiot-stack">05 · plc-iiot-stack</a><br><sub>OPC UA / MQTT → InfluxDB → Grafana</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/iolistgen">06 · iolistgen</a><br><sub>перечень сигналов → ST, карты Modbus, SCADA</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/<GITHUB_USER>/plc-ci-toolkit"><b>07 · plc-ci-toolkit</b></a><br><sub>линтеры, сборка CODESYS, тесты, JUnit</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/s7-to-codesys">08 · s7-to-codesys</a><br><sub>конвертер SCL → ST с отчётом о переносе</sub></td><td width="33%"><a href="https://github.com/<GITHUB_USER>/sis-interlock-demo">09 · sis-interlock-demo</a><br><sub>ПАЗ: MooN, матрица причин и следствий</sub></td></tr>
+</table>

@@ -262,6 +262,9 @@ Windows-job — задание `codesys` переиспользуемого work
    Actions to create and approve pull requests» снят.
 4. Нажать **Save** в каждом блоке.
 
+Картинка для ссылок на репозиторий: Settings → General → Social preview → **Edit** → загрузить
+`docs/media/social-preview.png` (1280 × 640).
+
 По желанию: Settings → Rules → Rulesets — правило для `main` (запрет принудительного push и
 удаления); окружение `codesys` — [runner_security.md, раздел 3.3](runner_security.md#33-окружение-с-обязательным-одобрением)
 (пока `plc-codesys.yml` окружение не объявляет, правило ни на что не влияет).
