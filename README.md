@@ -15,7 +15,7 @@
   <img alt="GitHub Actions: переиспользуемые workflow" src="https://img.shields.io/badge/GitHub%20Actions-workflow__call-3A4B60?style=flat-square&logo=githubactions&logoColor=white">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3A4B60?style=flat-square&logo=python&logoColor=white">
   <a href=".github/actionlint.yaml"><img alt="Workflow проверены actionlint" src="https://img.shields.io/badge/workflows-actionlint-3A4B60?style=flat-square&labelColor=1B2736"></a>
-  <a href="#тесты-и-проверки"><img alt="Тесты локального прогона 19.10.2026: pytest 680, coUnit 18 из 18" src="https://img.shields.io/badge/tests-pytest%20680%20%C2%B7%20coUnit%2018%2F18-3A4B60?style=flat-square&labelColor=1B2736"></a>
+  <a href="#тесты-и-проверки"><img alt="Тесты локального прогона 19.10.2026: coUnit 18 из 18 в CODESYS Control Win, pytest 680" src="https://img.shields.io/badge/tests-coUnit%2018%2F18%20%C2%B7%20pytest%20680-3A4B60?style=flat-square&labelColor=1B2736"></a>
 </p>
 
 <p align="center">
