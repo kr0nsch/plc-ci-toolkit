@@ -30,8 +30,8 @@
 | 2026-10-16 | `run_rusty.py` (RuSTy 1.0.6, `plc --check`, Windows, локально) | 11 файлов `build/assembled/rusty/` (`src/` и `tests/` с прокладками coUnit и Standard) | 0 ошибок, 0 предупреждений; исключений в `rusty_exclude.txt` нет |
 | 2026-10-16 | `ci/sa_check.py` + `ci/sa_report.py` (CODESYS 3.5.17.30, Static Analysis Light, 6 правил, локально) | рабочий проект `src/` | находок 0; базовая линия пуста |
 | 2026-10-16 | то же с `--tests` (вне CI, для сведения) | тестовый проект `src/` и `tests/` | 11 × SA0167 «Временный экземпляр ФБ: 'fbDut'» — экземпляр в `VAR` методов `FB_Example_Test`, так задумано ([ASSUMPTIONS.md, C9](ASSUMPTIONS.md)); тестовый проект CI не анализирует |
-| — | iec_checker 0.4 (CI, Linux) | 11 объектов `src/` и `tests/` | _перенести из отчёта CI_ |
-| — | iec_checker `nightly` (CI, необязательно) | то же | _перенести из отчёта CI_ |
+| 2026-10-19 | iec_checker 0.4 (CI, Linux, `plc-static.yml`) | 11 объектов `src/` и `tests/` | ошибок разбора нет; необоснованных 0; обоснованных 100; артефактов сборки 10 ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)) |
+| 2026-10-19 | iec_checker `nightly` (CI, необязательно) | то же | необоснованных 0; обоснованных 88 ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)) |
 
 ## Находки
 

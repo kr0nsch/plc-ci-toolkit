@@ -38,8 +38,8 @@ Linux; полная сборка в CODESYS 3.5.17.30, загрузка в CODES
 
 GIF и сводка ниже сняты с реальных прогонов на этой машине (CODESYS 3.5.17.30, CODESYS Control Win V3,
 coUnit 1.2.0.0): те же команды и в том же порядке, что выполняют задания на раннерах. Схема — рисунок,
-цифры на ней — из этих прогонов. На GitHub workflow ещё не запускались — это первый push
-(см. «Ограничения»).
+цифры на ней — из этих прогонов. На GitHub Linux-задания зелёные с первого push
+([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)); Windows-задание ждёт self-hosted раннера (см. «Ограничения»).
 
 <p align="center">
   <picture>
@@ -283,7 +283,8 @@ python tools/codesys/cds.py runtime stop
 находок, RuSTy 0 ошибок; Windows-задание — Static Analysis Light 0 находок, сборка без ошибок, 18 из 18
 тестов coUnit, JUnit XML; pre-commit останавливает коммит с «магическим числом».
 
-На GitHub workflow ещё не запускались — это первый push (см. «Ограничения»).
+На GitHub (19.10.2026) зелёные actionlint, `plc-static.yml` на примере ST и скрипты `ci/` на Ubuntu и
+Windows ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)); задание CODESYS без раннера пропускается (см. «Ограничения»).
 
 ## Документация
 
@@ -304,11 +305,12 @@ python tools/codesys/cds.py runtime stop
 - **Windows-задание на раннере ещё не проходило.** Критерий «сборка, тесты, JUnit в отчёте на раннере
   владельца» подтверждает владелец по [MANUAL_STEPS.md, разделы 9–13](docs/MANUAL_STEPS.md#9-self-hosted-раннер-порядок-действий);
   до этого бейдж CODESYS статичный.
-- **На GitHub workflow ещё не запускались.** Выгрузка скриптов `ci/` через `job.workflow_repository`
-  и `job.workflow_sha` и очередь `concurrency.queue: max` описаны в документации GitHub, но
-  actionlint 1.7.12 их не знает (отфильтровано в `.github/actionlint.yaml`) — проверит первый запуск
-  ([ASSUMPTIONS.md, W3–W4](docs/ASSUMPTIONS.md#переиспользуемые-workflow-plc-ci-toolkit)). Локально
-  actionlint работал без shellcheck; в CI его задание проверяет скрипты shellcheck.
+- **Очередь Windows-заданий не проверена.** Первый запуск на GitHub подтвердил выгрузку скриптов `ci/`
+  через `job.workflow_repository` и `job.workflow_sha` ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)); `plc-codesys.yml` с
+  `concurrency.queue: max` GitHub принял (задание пропущено, а не «Invalid workflow file»), но саму очередь
+  покажут только запуски на раннере ([ASSUMPTIONS.md, W3–W4](docs/ASSUMPTIONS.md#переиспользуемые-workflow-plc-ci-toolkit)).
+  actionlint 1.7.12 эти ключи не знает (отфильтровано в `.github/actionlint.yaml`); в CI задание actionlint
+  проверяет скрипты и shellcheck.
 - **Нужен свой раннер.** У GitHub нет раннеров с CODESYS. Рантайм без лицензии работает 2 ч —
   задание перезапускает его и не может длиться дольше 110 мин; рантайм один на машину, поэтому
   задания идут по очереди.
@@ -328,7 +330,8 @@ Static Analysis Light with a baseline, import, build, download to CODESYS Contro
 read from runtime variables, JUnit published as annotations and a job summary with read-only tokens.
 The Windows job never runs on pull requests (a guard job enforces it); all actions are pinned by SHA.
 A pre-commit hook blocks commits with IDE edits not exported to `src/`. All steps were dry-run locally
-with real CODESYS; the first GitHub run is pending. Docs are in Russian.
+with real CODESYS; on GitHub the Linux jobs are green, the Windows job awaits a self-hosted runner.
+Docs are in Russian.
 
 ## Лицензия
 
