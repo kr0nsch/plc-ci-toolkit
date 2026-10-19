@@ -82,3 +82,30 @@ tests/                               тесты CfUnit в той же раскл
 7. Ограничения и дальнейшие шаги.
 8. Summary (EN).
 9. Лицензия.
+
+## Разработка plc-ci-toolkit
+
+Правила выше — общие для ПЛК-репозиториев портфолио; здесь — для самого тулкита.
+
+- Проверки перед коммитом (Python 3.11+, CODESYS не нужен):
+
+  ```bash
+  python -m pip install -r requirements-dev.txt pre-commit==4.7.0
+  python -m ruff check . && python -m ruff format --check . && python -m mypy
+  python -m pytest -q
+  python -m pre_commit run --all-files
+  actionlint
+  ```
+
+  actionlint — версии 1.7.12, как в CI (настройки — `.github/actionlint.yaml`).
+- `uses:` в workflow — только по полному SHA коммита с комментарием версии (`# v7.0.1`); это
+  проверяет `ci/tests/test_workflows.py`, источники SHA — `docs/ASSUMPTIONS.md`, W1.
+- Скрипты `ci/` — только стандартная библиотека Python 3.11+: на раннере ничего не ставится, кроме
+  Python. Скрипты шагов Windows в `plc-codesys.yml` — только ASCII: Windows PowerShell 5.1 читает файл
+  скрипта в кодировке ANSI (W6); сообщения по-русски выводят скрипты Python.
+- Новый вход или выход workflow — в `docs/USAGE.md` (разделы 4–5), а нужный потребителю — и в
+  `examples/consumer-ci.yml`. Переименование или удаление входа — новый основной тег `v2`
+  (`docs/MANUAL_STEPS.md`, раздел 17).
+- `tools/`, `src/` и `tests/` — копия plc-repo-template, тестовый стенд workflow: здесь они не
+  правятся, а синхронизируются с шаблоном. Свои у тулкита только файлы настроек проекта
+  (`tools/codesys/config.json`, `tools/check/*.toml`).

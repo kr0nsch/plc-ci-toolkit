@@ -82,12 +82,51 @@ _Нет._
 
 ## Проверки без CODESYS
 
-Итоги последнего прогона CI (ссылка на запуск GitHub Actions) или локального прогона.
+Последний прогон CI на GitHub — [39259547098](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39259547098)
+(19.10.2026, коммит `3bfe95a`, задание `plc-static (пример ST)`); локально — та же версия `main`,
+Windows 11, Python 3.12, iec_checker v0.4 и RuSTy v1.0.6 (Windows-сборки).
 
-| Проверка | Итог | Примечание |
-|---|---|---|
-| `ruff check`, `ruff format --check`, `mypy`, `pytest` | пройдено, 2026-10-16, локально | pytest: все тесты, включая интеграционные с настоящими `plc` и iec_checker |
-| `tools/assemble.py` (все варианты, с `--tests` и без) | пройдено, 2026-10-16, локально | 8 объектов `src/` + 3 объекта `tests/` |
-| `tools/check/st_lint.py --strict` | пройдено, 2026-10-16, локально | 60 файлов, 0 замечаний |
-| iec_checker 0.4 (локально, `run_iec_checker.py --tests`) | пройдено, 2026-10-16 | 11 файлов, ошибок разбора нет; необоснованных находок 0, обоснованных 100 — разбор в [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md) |
-| RuSTy 1.0.6 (локально, `run_rusty.py`) | пройдено, 2026-10-16 | 11 файлов (`src/` и `tests/` с прокладкой coUnit), исключений нет, 0 ошибок, 0 предупреждений |
+| Проверка | GitHub, 19.10.2026 | Локально, 19.10.2026 | Примечание |
+|---|---|---|---|
+| `ruff check`, `ruff format --check`, `mypy` | пройдено | пройдено | mypy: 29 файлов без замечаний |
+| `pytest` | 682 пройдено, 4 пропущено | 686 пройдено | на GitHub RuSTy загружается после pytest, его интеграционные тесты пропускаются ([ASSUMPTIONS.md](ASSUMPTIONS.md#переиспользуемые-workflow-plc-ci-toolkit), W9); без iec_checker и RuSTy локально — 676 пройдено, 10 пропущено |
+| `tools/assemble.py --tests` | пройдено | пройдено | 11 объектов: 8 из `src/`, 3 из `tests/` |
+| `tools/check/st_lint.py --strict` | пройдено | пройдено | 60 файлов, 0 замечаний |
+| iec_checker v0.4 (`run_iec_checker.py --tests`) | пройдено | пройдено | 11 файлов, ошибок разбора нет; необоснованных находок 0, обоснованных 100 — разбор в [STATIC_ANALYSIS.md](STATIC_ANALYSIS.md) |
+| RuSTy 1.0.6 (`run_rusty.py`) | пройдено | пройдено | 11 файлов (`src/` и `tests/` с прокладкой coUnit), исключений нет, 0 ошибок |
+| actionlint 1.7.12 | пройдено | не запускался | четыре workflow и `examples/consumer-ci.yml` |
+| `pytest ci/tests` | пройдено: Ubuntu (Python 3.11, 3.13), Windows (3.11) | входит в `pytest` | скрипты `ci/` |
+
+Первый push на GitHub ([39248140323](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248140323),
+коммит `5a0849e`) упал на шаге mypy в заданиях `plc-static (пример ST)` и `Скрипты ci/ (ubuntu-latest,
+Python 3.11)`: под Linux mypy считал недостижимым код для Windows. Исправлено в `1aee06c` (`platform =
+"win32"` в `pyproject.toml`); с прогона [39248625868](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)
+CI в `main` зелёный.
+
+## Пробные прогоны workflow
+
+Шаги обоих переиспользуемых workflow выполнялись локально в том же порядке и с теми же условиями
+`if:`, на собственном примере ST. На настоящем self-hosted раннере GitHub Windows-задание ещё не
+выполнялось ([MANUAL_STEPS.md, разделы 9–13](MANUAL_STEPS.md#9-self-hosted-раннер-порядок-действий)).
+
+**16.10.2026.**
+
+- Linux-задание — в Git Bash, с Windows-сборками iec_checker v0.4 и RuSTy v1.0.6 вместо загрузки
+  Linux-бинарников: все 17 шагов зелёные, pytest — 463 теста, `st_lint` — 0 замечаний,
+  iec_checker — 0 необоснованных находок, RuSTy — 0 ошибок. С внесённым «магическим числом»
+  задание падает, сводка и аннотация указывают на файл и строку.
+- Windows-задание — в той же обёртке Windows PowerShell 5.1, что у раннера, с CODESYS 3.5.17.30 и
+  Control Win V3: Static Analysis Light — 0 находок, рантайм перезапущен (окно 120 мин),
+  18 из 18 тестов coUnit, JUnit, `result=success`. Со сломанным тестом задание падает, JUnit и
+  сводка называют тест и сообщение coUnit; с ошибкой компиляции — аннотация на строке в `src/`;
+  без CODESYS шаг падает с кодом 3, и этот код виден в журнале шага.
+- Подключение к чистому репозиторию из шаблона по [USAGE.md](USAGE.md) (копия
+  `examples/consumer-ci.yml`, CI шаблона удалён): оба задания зелёные — 311 тестов pytest шаблона,
+  0 находок Static Analysis Light (правила — по умолчанию из plc-ci-toolkit, базовой линии нет),
+  18 из 18 тестов coUnit; Windows-задание — и в каталоге с пробелами и скобками в пути.
+
+**19.10.2026** — после синхронизации инструментов с шаблоном; с этих прогонов сняты GIF в README:
+Linux-задание — pytest 680 тестов, `st_lint` 0 замечаний, iec_checker 0 необоснованных находок,
+RuSTy 0 ошибок; Windows-задание — Static Analysis Light 0 находок, сборка без ошибок, 18 из 18
+тестов coUnit, JUnit XML; pre-commit останавливает коммит с «магическим числом». Позже в тот же день
+в `main` добавлены тесты ключа `checker` (`run_iec_checker.py`) — сейчас pytest собирает 686 тестов.

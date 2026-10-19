@@ -95,8 +95,9 @@ Win V3 3.5.17.30 в пользовательском процессе, 16.10.202
 (Windows PowerShell 5.1 с `-File`, скрипт в UTF-8 без BOM, `$ErrorActionPreference = 'stop'`, выход по
 `$LASTEXITCODE`), с настоящим CODESYS 3.5.17.30 и Control Win V3. Те же прогоны — на чистом
 репозитории из шаблона, подключённом по USAGE.md (копия `examples/consumer-ci.yml` с его входами):
-оба задания зелёные. На GitHub (19.10.2026) Linux-задания зелёные с первого push ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868));
-Windows-задание ждёт раннера.
+оба задания зелёные. На GitHub (19.10.2026) Linux-задания зелёные ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248625868)):
+первый push ([прогон](https://github.com/kr0nsch/plc-ci-toolkit/actions/runs/39248140323)) упал на mypy под Linux,
+исправлено в `1aee06c`. Windows-задание ждёт раннера.
 
 | № | Решение | Статус | Обоснование / чем проверено |
 |---|---|---|---|

@@ -34,7 +34,13 @@ flowchart LR
 ## 1. За 10 минут: проверки без CODESYS
 
 Нужно: репозиторий на шаблоне plc-repo-template (`tools/`, `src/`, `tests/`, `pyproject.toml`,
-`requirements-dev.txt`), Python 3.11+ и git локально. CODESYS не нужен.
+`requirements-dev.txt`), Python 3.11+ и git локально. CODESYS не нужен. Проект пока только в
+`.project` — сначала [раздел 9](#9-если-проект-ещё-не-на-шаблоне).
+
+Workflow вызывают инструменты из `tools/` вашего репозитория (`assemble.py`, `check/st_lint.py`,
+`check/run_iec_checker.py`, `check/run_rusty.py`, `codesys/cds.py`) с ключами plc-repo-template
+1.0.0; подходят `tools/` этой версии шаблона и новее. В plc-ci-toolkit `tools/` — копия шаблона,
+на которой CI проверяет workflow.
 
 1. **Проверьте, что инструменты шаблона на месте** (из корня своего репозитория):
 
@@ -51,6 +57,9 @@ flowchart LR
    python tools/assemble.py --tests
    python tools/check/st_lint.py --strict
    ```
+
+   Ожидается: ruff — `All checks passed!`, mypy — `Success: no issues found …`, pytest — без
+   `failed`, `assemble: N объектов …`, `st_lint: … ошибок 0, предупреждений 0`.
 
 3. **Добавьте вызывающий workflow** — копию [examples/consumer-ci.yml](../examples/consumer-ci.yml):
 
@@ -94,7 +103,8 @@ flowchart LR
    git push -u origin ci/plc-ci-toolkit
    ```
 
-   В pull request запустится задание «Проверки без CODESYS» (несколько минут). Задание
+   В pull request запустится задание «Проверки без CODESYS» (около минуты; на странице запуска —
+   сводка с таблицей проверок, замечания — аннотациями на строках диффа). Задание
    «CODESYS — сборка и тесты coUnit» для pull request не запускается никогда — это намеренно
    (раздел 3).
 
@@ -291,3 +301,60 @@ push и ручного запуска группа своя (`github.run_id`).
 | `codesys` не запускается | нет переменной `PLC_CODESYS_RUNNER=true`, событие не из таблицы раздела 3 или запуск не из `main` |
 | `guard`: «событие … запрещено» | вызывающий workflow вызывает `plc-codesys.yml` для pull request — исправить условие `if:` по примеру |
 | остальное на раннере | [MANUAL_STEPS.md, раздел 14](MANUAL_STEPS.md#14-если-windows-job-не-прошёл) |
+
+## 9. Если проект ещё не на шаблоне
+
+Workflow проверяют текстовую раскладку `src/` и `tests/` ([LAYOUT.md](LAYOUT.md)) и вызывают
+инструменты шаблона из `tools/`. Существующий проект CODESYS переводится на неё один раз —
+выгрузкой исходников в текст. Нужны Windows, CODESYS 3.5.17.30 с CODESYS Control Win V3, coUnit
+1.2.0.0 и Python 3.11+ ([MANUAL_STEPS.md, разделы 1–3](MANUAL_STEPS.md#1-установка-codesys-351730)).
+
+1. **Репозиторий из шаблона.** На GitHub: [plc-repo-template](https://github.com/kr0nsch/plc-repo-template)
+   → **Use this template → Create a new repository**, затем клонировать. Имя каталога клона —
+   имя проекта для `cds.py` (`build/<имя>.project`); другое имя — переменная `CDS_PROJECT_NAME`.
+2. **Выгрузка исходников.** Скопировать свой проект в `build\<имя>.project` и выполнить:
+
+   ```bat
+   python tools\codesys\cds.py export
+   git status
+   ```
+
+   `export` пишет в `src/` POU, DUT, GVL, интерфейсы, их методы и свойства на ST и удаляет файлы
+   раскладки, которых в проекте нет, — пример шаблона (`FB_Example`, `F_Clamp`, `GVL_Const` и др.)
+   заменится вашими объектами. Тесты примера в `tests/` (`FB_Example_Test`, `FB_F_Clamp_Test` и их
+   экземпляры в `PRG_Tests`) удалить или заменить своими.
+3. **Настройки проекта** — `tools/codesys/config.json`: задачи и вызываемые программы
+   (`modes.normal.tasks`), библиотеки, на которые ссылается код (`libraries` и
+   `modes.normal.libraries`). `cds.py import` собирает проект по этому файлу: лишние задачи удаляет,
+   ссылки на библиотеки приводит к списку ([tools/README.md](../tools/README.md#импорт-и-экспорт-правила)).
+   Устройство (`device`) оставьте CODESYS Control Win V3: на нём `cds.py test` загружает и
+   запускает тесты.
+4. **Проект из текста.** Скопированный проект — с вашим устройством, а `cds.py` сверяет устройство
+   с `config.json`, поэтому проект пересоздаётся из `src/`:
+
+   ```bat
+   python tools\codesys\cds.py import --clean
+   python tools\codesys\cds.py build
+   python tools\codesys\cds.py roundtrip
+   ```
+
+   Ожидается: сборка без ошибок (ошибки — с файлом и строкой в `src/`), `roundtrip` без диффа — всё,
+   что выгружено, переносится в проект и обратно без изменений.
+5. **Линтер и статанализ.** `python tools/check/st_lint.py --strict` проверяет правила
+   CONTRIBUTING.md шаблона: заголовки POU, префиксы имён, «магические числа». Правила, которые
+   существующий код пока не выполняет, переведите в `warning` или `off` (раздел `[severity]`
+   `tools/check/st_lint.toml`), отдельные места — подавлением `// lint:allow STL008 причина`
+   ([tools/README.md](../tools/README.md#checkst_lintpy--линтер)). Находки iec_checker обосновываются
+   в `tools/check/iec_checker_allow.toml`; на первое время статанализ можно выключить входом
+   `iec-checker: off`.
+6. Закоммитить `src/`, `tests/`, `tools/codesys/config.json`, `tools/check/st_lint.toml` и подключить
+   CI по [разделу 1](#1-за-10-минут-проверки-без-codesys).
+
+В текст не попадают дерево устройств и конфигурация модулей ввода-вывода, визуализации, POU на
+графических языках (FBD, LD, SFC, CFC) и действия (`ACTION`); о визуализациях, действиях и
+графических POU `export` предупреждает. Описывайте их в `docs/`
+([MANUAL_STEPS.md, раздел 6](MANUAL_STEPS.md#6-работа-в-ide-и-экспорт-перед-коммитом)).
+Persistent Variables скриптом не создаются — ручной шаг там же.
+
+_Перенос готового проекта целиком отдельно не проверялся: команды `export`, `import --clean`,
+`build` и `roundtrip` проверены в CODESYS 3.5.17.30 на примере шаблона._
