@@ -9,6 +9,10 @@
 
 ### Changed
 
+- Инструменты шаблона plc-repo-template: `device.keep_tasks` (импорт не удаляет задачу `OwenCloudTask` устройства
+  ОВЕН ПЛК210 и СПК210), `CDS_DEVICE_TITLE`, варианты устройств ПЛК210, СПК210 и REGUL R500 в `config.json`.
+- README: задачи инженера ОВЕН и REGUL; пример `src/` собран на ОВЕН ПЛК210 (OwenTargets 3.5.17.36) и
+  REGUL R500 61 (Astra.IDE 1.7.2.2) — 0 ошибок, в ПЛК не загружалось.
 - `run_iec_checker.py`: ключ `checker` (`v0.4` или `nightly`) в файле обоснований — запись применяется и
   проверяется на использование только для своей версии разборщика; `--checker`, по умолчанию `nightly` с
   `--docker`, иначе `v0.4`. Версия попадает в отчёты (поле `checker` в JSON). Записи UnusedVariable для `stCmd`,

@@ -24,13 +24,15 @@
   <a href="#summary-en">Summary (EN)</a>
 </p>
 
-**CI для ПЛК-проектов на CODESYS V3.5 в GitHub.** Проект CODESYS — бинарный файл `.project`: в git
+**CI для ПЛК-проектов ОВЕН ПЛК210/СПК210 (CODESYS V3.5 SP17 Patch 3) и REGUL R500 (Astra.IDE) в GitHub.**
+Полный статанализ и Test Manager CODESYS входят в подписку Professional Developer Edition, недоступную из России;
+в документации ОВЕН по CODESYS нет ни одного документа про тесты или CI. Проект — бинарный файл `.project`: в git
 не видно, что изменилось, pull request не отревьюить, а сборку и юнит-тесты запускают вручную в IDE.
 Текст для git даёт шаблон [plc-repo-template](https://github.com/kr0nsch/plc-repo-template):
 исходники ST в `src/` и `tests/`, куда проект один раз выгружается командой `cds.py export` из
 `tools/` шаблона. plc-ci-toolkit — CI для репозиториев на этом шаблоне и с его `tools/`: каждый pull request —
 линтер и статанализ примерно за минуту без CODESYS, каждый push в `main` — сборка в настоящем
-CODESYS и юнит-тесты на вашем Windows-раннере. Для команд АСУ ТП, которые ведут проекты CODESYS в git.
+CODESYS и юнит-тесты на вашем Windows-раннере. Для команд АСУ ТП на ОВЕН и REGUL, которые ведут код ПЛК в git.
 
 ## Что это и зачем
 
@@ -56,8 +58,16 @@ CODESYS и юнит-тесты на вашем Windows-раннере. Для к
 - Подключение — один файл [examples/consumer-ci.yml](examples/consumer-ci.yml), 32 строки без
   комментариев; версия закреплена тегом `@v1`, все actions внутри — по SHA коммита.
 
-**Для кого.** Инженеры АСУ ТП и техлиды у интеграторов, машиностроителей и вендоров ПЛК, которые
-держат код CODESYS в git на GitHub и хотят ревью и автоматические проверки, как в разработке ПО.
+**Для кого.** Инженеры АСУ ТП и техлиды у интеграторов и машиностроителей на ОВЕН ПЛК210/СПК210 (CODESYS
+V3.5 SP17 Patch 3) и REGUL (Astra.IDE), которые держат код ПЛК в git на GitHub и хотят ревью и автоматические
+проверки, как в разработке ПО, без Professional Developer Edition.
+
+**Платформа.** Задание Linux (`plc-static.yml`) от среды не зависит: проверяет тексты ST в раскладке шаблона.
+Задание Windows (`plc-codesys.yml`) рассчитано на CODESYS 3.5.17.30 (сборка с FTP ОВЕН) и CODESYS Control Win V3;
+с Astra.IDE оно не проверялось. Пример `src/` этого репозитория 20.10.2026 собран и на целевых ПЛК теми же
+`tools/` шаблона: ОВЕН ПЛК210 (пакет OwenTargets 3.5.17.36) — `cds.py build` 0 ошибок, 0 предупреждений,
+`check --tests` 11 объектов без ошибок; REGUL R500 61 в Astra.IDE 1.7.2.2 — `build` 0/0, `check` 8 объектов (в ПЛК
+не загружалось).
 
 **Что нужно от репозитория.** Исходники — текстом ST в раскладке шаблона
 [plc-repo-template](https://github.com/kr0nsch/plc-repo-template) (`src/`, `tests/`), рядом — его
@@ -208,7 +218,7 @@ python tools/check/st_lint.py --strict
 
 | Команда | Увидите |
 |---|---|
-| `pytest -q` | `676 passed, 10 skipped`: 10 интеграционных тестов ждут iec_checker и RuSTy; с ними — `686 passed` |
+| `pytest -q` | `678 passed, 10 skipped`: 10 интеграционных тестов ждут iec_checker и RuSTy; с ними — `688 passed` |
 | `assemble.py --tests` | `assemble: 11 объектов (iec), записано в …/build/assembled` |
 | `st_lint.py --strict` | `st_lint: файлов 60, ошибок 0, предупреждений 0` |
 
@@ -574,8 +584,8 @@ python -m pre_commit run --all-files
 actionlint
 ```
 
-Ожидается: `All checks passed!`, `Success: no issues found in 29 source files`, `686 passed`
-(без iec_checker и RuSTy — `676 passed, 10 skipped`), все хуки pre-commit `Passed`. actionlint —
+Ожидается: `All checks passed!`, `Success: no issues found in 29 source files`, `688 passed`
+(без iec_checker и RuSTy — `678 passed, 10 skipped`), все хуки pre-commit `Passed`. actionlint —
 необязательно, версия как в CI — [1.7.12](https://github.com/rhysd/actionlint/releases/tag/v1.7.12),
 настройки — `.github/actionlint.yaml`. Правила разработки — [CONTRIBUTING.md](CONTRIBUTING.md#разработка-plc-ci-toolkit).
 
@@ -641,7 +651,9 @@ actionlint
 
 ## Summary (EN)
 
-Reusable GitHub Actions workflows and a pre-commit hook for CODESYS V3.5 (3.5.17.30) repositories
+Reusable GitHub Actions workflows and a pre-commit hook for PLC repositories on OWEN PLC210/SPK210 (CODESYS V3.5
+SP17 Patch 3, 3.5.17.30) and REGUL R500 (Astra.IDE) — environments without CODESYS Test Manager or full static
+analysis —
 built on plc-repo-template: ST sources as text plus the template's `tools/`, which the workflows
 call (the toolkit does not convert `.project` files itself). `plc-static.yml` (GitHub-hosted Linux,
 every push and pull request): ruff, mypy, pytest, the `st_lint` linter, iec_checker, RuSTy.
@@ -656,9 +668,9 @@ runner. Only ST objects are covered (no graphical POUs or visualizations). Docs 
 
 ---
 
-<p align="center"><b>Портфолио АСУ ТП</b></p>
+<p align="center"><b>Портфолио АСУ ТП</b> · <sub>инструменты и практики для ПЛК ОВЕН и REGUL</sub></p>
 <table>
-<tr><td width="33%"><a href="https://github.com/kr0nsch/plc-repo-template">01 · plc-repo-template</a><br><sub>ST в git, сборка проекта скриптом, CI</sub></td><td width="33%"><a href="https://github.com/kr0nsch/plc-process-lib">02 · plc-process-lib</a><br><sub>ФБ: AI, двигатель, ПЧ, задвижка, ПИД, тревоги</sub></td><td width="33%"><a href="https://github.com/kr0nsch/kns-pump-station">03 · kns-pump-station</a><br><sub>флагман: КНС, три насоса с ПЧ, модель, ПМИ</sub></td></tr>
-<tr><td width="33%"><a href="https://github.com/kr0nsch/kns-port-domestic">04 · kns-port-domestic</a><br><sub>перенос на Astra.IDE / MasterSCADA 4D</sub></td><td width="33%"><a href="https://github.com/kr0nsch/plc-iiot-stack">05 · plc-iiot-stack</a><br><sub>OPC UA / MQTT → InfluxDB → Grafana</sub></td><td width="33%"><a href="https://github.com/kr0nsch/iolistgen">06 · iolistgen</a><br><sub>перечень сигналов → ST, карты Modbus, SCADA</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/kr0nsch/plc-repo-template">01 · plc-repo-template</a><br><sub>ST в git, сборка для ПЛК210 и R500, CI</sub></td><td width="33%"><a href="https://github.com/kr0nsch/plc-process-lib">02 · plc-process-lib</a><br><sub>ФБ: AI, двигатель, ПЧ, задвижка, ПИД, тревоги</sub></td><td width="33%"><a href="https://github.com/kr0nsch/kns-pump-station">03 · kns-pump-station</a><br><sub>флагман: КНС, ПМИ на модели, сборка ПЛК210</sub></td></tr>
+<tr><td width="33%"><a href="https://github.com/kr0nsch/kns-port-domestic">04 · kns-port-domestic</a><br><sub>перенос КНС на REGUL R500 (Astra.IDE)</sub></td><td width="33%"><a href="https://github.com/kr0nsch/plc-iiot-stack">05 · plc-iiot-stack</a><br><sub>OPC UA / MQTT → InfluxDB → Grafana</sub></td><td width="33%"><a href="https://github.com/kr0nsch/iolistgen">06 · iolistgen</a><br><sub>перечень сигналов → ST, карты Modbus, SCADA</sub></td></tr>
 <tr><td width="33%"><a href="https://github.com/kr0nsch/plc-ci-toolkit"><b>07 · plc-ci-toolkit</b></a><br><sub>линтеры, сборка CODESYS, тесты, JUnit</sub></td><td width="33%"><a href="https://github.com/kr0nsch/s7-to-codesys">08 · s7-to-codesys</a><br><sub>конвертер SCL → ST с отчётом о переносе</sub></td><td width="33%"><a href="https://github.com/kr0nsch/sis-interlock-demo">09 · sis-interlock-demo</a><br><sub>ПАЗ: MooN, матрица причин и следствий</sub></td></tr>
 </table>
